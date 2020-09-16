@@ -20,10 +20,16 @@ def tokenize(string: str) -> Generator[Token, None, None]:
         ('RPAREN', (r'\)',)),
         ('LSQUARE', (r'\[',)),
         ('RSQUARE', (r'\]',)),
-        ('EQUAL', (r'=',)),
+        ('EQ', (r'==',)),
+        ('NE', (r'!=',)),
+        ('LE', (r'<=',)),
+        ('LT', (r'<',)),
+        ('GE', (r'>=',)),
+        ('GT', (r'>',)),
+        ('ASSIGN', (r'=',)),
+        ('PASSIGN', (r'\+=',)),
         ('DOT', (r'\.',)),
         ('COMMA', (r',',)),
-        ('PEQUAL', (r'\+=',)),
         ('FLOW', (r'flow',)),
         ('INTERNAL', (r'internal',)),
         ('ENTRYPOINT', (r'entrypoint',)),
@@ -42,10 +48,10 @@ def tokenize(string: str) -> Generator[Token, None, None]:
         ('TYPE', (r'int|float|str',)),
         ('BOOL', (r'true|false',)),
         ('IN', (r'in',)),
-        ('ID', (r'[A-Za-z_][A-Za-z0-9_]*',)),
-        ('FLOAT', (r'[+-]?[ \t]*(\d+\.\d*|\d*\.\d+)',)), # todo: fix this
+        ('ID', (r'[A-Za-z](?:[A-Za-z0-9_\-]*[A-Za-z0-9]|[A-Za-z0-9]*)',)),
+        ('FLOAT', (r'[+-]?[ \t]*(?:\d+\.\d*|\d*\.\d+)',)), # todo: fix this
         ('INT', (r'[+-]?[ \t]*\d+',)), # todo: hex
-        ('STRING', (r'"(\\\.|[^"\\])*"|\'(\\\.|[^\'\\])*\'',)),
+        ('STRING', (r'"(?:\\\.|[^"\\])*"|\'(?:\\\.|[^\'\\])*\'',)),
     ]
 
     t = make_tokenizer(specs)

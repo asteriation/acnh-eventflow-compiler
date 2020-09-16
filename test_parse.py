@@ -1,6 +1,6 @@
 import unittest
 
-from funcparserlib.lexer import LexerError
+from funcparserlib.lexer import Token, LexerError
 from parse import tokenize
 
 class TestTokenize(unittest.TestCase):
@@ -59,6 +59,21 @@ class TestTokenize(unittest.TestCase):
         with self.assertRaises(LexerError):
             list(tokenize('['))
 
+    def test_id(self):
+        self.assertNotEqual(next(tokenize('0abc')).type, 'ID')
+        with self.assertRaises(LexerError):
+            next(tokenize('-abc'))
+        with self.assertRaises(LexerError):
+            next(tokenize('_abc'))
+        with self.assertRaises(LexerError):
+            list(tokenize('abc-'))
+        with self.assertRaises(LexerError):
+            list(tokenize('abc_'))
+        self.assertEqual(list(tokenize('abc_d0-3')), [
+            Token('ID', 'abc_d0-3'),
+            Token('NL', '')
+        ])
+
     def test_example(self):
         src = ''' \
             flow Test(a: int = 5, b: float = 3.0): # comment
@@ -73,21 +88,21 @@ class TestTokenize(unittest.TestCase):
                         branch2:
                             pass'''
         expected = [
-            'FLOW', 'ID', 'LPAREN', 'ID', 'COLON', 'TYPE', 'EQUAL',
-                'INT', 'COMMA', 'ID', 'COLON', 'TYPE', 'EQUAL', 'FLOAT',
+            'FLOW', 'ID', 'LPAREN', 'ID', 'COLON', 'TYPE', 'ASSIGN',
+                'INT', 'COMMA', 'ID', 'COLON', 'TYPE', 'ASSIGN', 'FLOAT',
                 'RPAREN', 'COLON', 'NL',
             'INDENT', 'IF', 'ID', 'LSQUARE', 'INT', 'RSQUARE', 'IN',
                 'LPAREN', 'INT', 'COMMA', 'INT', 'RPAREN', 'COLON', 'NL',
             'INDENT', 'ID', 'DOT', 'ID', 'LSQUARE', 'STRING', 'RSQUARE',
-                'EQUAL', 'INT', 'NL',
+                'ASSIGN', 'INT', 'NL',
             'DEDENT', 'ELSE', 'COLON', 'NL',
             'INDENT', 'FORK', 'COLON', 'NL',
             'INDENT', 'BRANCH', 'COLON', 'NL',
             'INDENT', 'ID', 'DOT', 'ID', 'LSQUARE', 'STRING', 'RSQUARE',
-                'EQUAL', 'INT', 'NL',
+                'ASSIGN', 'INT', 'NL',
             'DEDENT', 'BRANCH', 'COLON', 'NL',
             'INDENT', 'ID', 'DOT', 'ID', 'LSQUARE', 'STRING', 'RSQUARE',
-                'EQUAL', 'INT', 'NL',
+                'ASSIGN', 'INT', 'NL',
             'DEDENT', 'BRANCH', 'COLON', 'NL',
             'INDENT', 'PASS', 'NL',
             'DEDENT', 'DEDENT', 'DEDENT', 'DEDENT',
