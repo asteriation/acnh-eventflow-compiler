@@ -60,7 +60,6 @@ class TestTokenize(unittest.TestCase):
             list(tokenize('['))
 
     def test_id(self):
-        self.assertNotEqual(next(tokenize('0abc')).type, 'ID')
         with self.assertRaises(LexerError):
             next(tokenize('-abc'))
         with self.assertRaises(LexerError):
@@ -73,6 +72,28 @@ class TestTokenize(unittest.TestCase):
             Token('ID', 'abc_d0-3'),
             Token('NL', '')
         ])
+        self.assertEqual(list(tokenize('0ab34')), [
+            Token('ID', '0ab34'),
+            Token('NL', '')
+        ])
+        self.assertEqual(list(tokenize('013-34')), [
+            Token('ID', '013-34'),
+            Token('NL', '')
+        ])
+        self.assertNotEqual(list(tokenize('01334')), [
+            Token('ID', '01334'),
+            Token('NL', '')
+        ])
+        self.assertEqual(list(tokenize('01-a')), [
+            Token('ID', '01-a'),
+            Token('NL', '')
+        ])
+        self.assertEqual(list(tokenize('01A_B_C')), [
+            Token('ID', '01A_B_C'),
+            Token('NL', '')
+        ])
+        with self.assertRaises(LexerError):
+            list(tokenize('01-'))
 
     def test_example(self):
         src = ''' \

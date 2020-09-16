@@ -48,7 +48,16 @@ def tokenize(string: str) -> Generator[Token, None, None]:
         ('TYPE', (r'int|float|str',)),
         ('BOOL', (r'true|false',)),
         ('IN', (r'in',)),
-        ('ID', (r'[A-Za-z](?:[A-Za-z0-9_\-]*[A-Za-z0-9]|[A-Za-z0-9]*)',)),
+        ('ID', (r'''
+            [A-Za-z]
+                (?:
+                    [A-Za-z0-9_\-]*[A-Za-z0-9]
+                  | [A-Za-z0-9]*)
+          | \d+
+                (?:
+                    [A-Za-z_\-][A-Za-z0-9_\-]*[A-Za-z0-9]
+                  | [A-Za-z][A-Za-z0-9]*)
+            ''', re.VERBOSE)),
         ('FLOAT', (r'[+-]?[ \t]*(?:\d+\.\d*|\d*\.\d+)',)), # todo: fix this
         ('INT', (r'[+-]?[ \t]*\d+',)), # todo: hex
         ('STRING', (r'"(?:\\\.|[^"\\])*"|\'(?:\\\.|[^\'\\])*\'',)),
