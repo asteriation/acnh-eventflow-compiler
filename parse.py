@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import re
 from typing import Generator, List, Tuple
 
@@ -20,34 +22,14 @@ def tokenize(string: str) -> Generator[Token, None, None]:
         ('RPAREN', (r'\)',)),
         ('LSQUARE', (r'\[',)),
         ('RSQUARE', (r'\]',)),
-        ('EQ', (r'==',)),
-        ('NE', (r'!=',)),
-        ('LE', (r'<=',)),
-        ('LT', (r'<',)),
-        ('GE', (r'>=',)),
-        ('GT', (r'>',)),
+        ('CMP', (r'[!=]=|[<>]=?',)),
         ('ASSIGN', (r'=',)),
         ('PASSIGN', (r'\+=',)),
         ('DOT', (r'\.',)),
         ('COMMA', (r',',)),
-        ('FLOW', (r'flow',)),
-        ('INTERNAL', (r'internal',)),
-        ('ENTRYPOINT', (r'entrypoint',)),
-        ('IF', (r'if',)),
-        ('ELIF', (r'elif',)),
-        ('ELSE', (r'else',)),
-        ('DO', (r'do',)),
-        ('WHILE', (r'while',)),
-        ('FORK', (r'fork',)),
-        ('BRANCH', (r'branch\d+',)),
-        ('RETURN', (r'return',)),
-        ('PASS', (r'pass',)),
-        ('NOT', (r'not',)),
-        ('AND', (r'and',)),
-        ('OR', (r'or',)),
         ('TYPE', (r'int|float|str',)),
+        ('KW', (r'flow|internal|entrypoint|if|elif|else|do|while|fork|branch\d+|return|pass|not|and|or|in',)),
         ('BOOL', (r'true|false',)),
-        ('IN', (r'in',)),
         ('ID', (r'''
             [A-Za-z]
                 (?:
@@ -92,6 +74,8 @@ def tokenize(string: str) -> Generator[Token, None, None]:
         elif x.type == 'NL':
             if pstack:
                 continue
+            if last_token and last_token.type == 'NL':
+                continue
             x = Token('NL', '', start=x.start, end=x.end)
         elif x.type == 'SP':
             if last_token and last_token.type == 'NL':
@@ -103,7 +87,8 @@ def tokenize(string: str) -> Generator[Token, None, None]:
                         if s == x.name:
                             indent.append(s)
                             break
-                        yield Token('DEDENT', '', start=x.start, end=x.end)
+                        last_token = Token('DEDENT', '', start=x.start, end=x.end)
+                        yield last_token
                     if not indent:
                         raise LexerError(x.end, 'dedent to unknown level')
                     continue
@@ -116,7 +101,7 @@ def tokenize(string: str) -> Generator[Token, None, None]:
                 continue
 
         last_token = x
-        yield x
+        yield last_token
 
     if pstack:
         raise LexerError((num_lines + 1, 0), 'unclosed parentheses/brackets')

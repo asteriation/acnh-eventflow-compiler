@@ -109,23 +109,23 @@ class TestTokenize(unittest.TestCase):
                         branch2:
                             pass'''
         expected = [
-            'FLOW', 'ID', 'LPAREN', 'ID', 'COLON', 'TYPE', 'ASSIGN',
+            'KW', 'ID', 'LPAREN', 'ID', 'COLON', 'TYPE', 'ASSIGN',
                 'INT', 'COMMA', 'ID', 'COLON', 'TYPE', 'ASSIGN', 'FLOAT',
                 'RPAREN', 'COLON', 'NL',
-            'INDENT', 'IF', 'ID', 'LSQUARE', 'INT', 'RSQUARE', 'IN',
+            'INDENT', 'KW', 'ID', 'LSQUARE', 'INT', 'RSQUARE', 'KW',
                 'LPAREN', 'INT', 'COMMA', 'INT', 'RPAREN', 'COLON', 'NL',
             'INDENT', 'ID', 'DOT', 'ID', 'LSQUARE', 'STRING', 'RSQUARE',
                 'ASSIGN', 'INT', 'NL',
-            'DEDENT', 'ELSE', 'COLON', 'NL',
-            'INDENT', 'FORK', 'COLON', 'NL',
-            'INDENT', 'BRANCH', 'COLON', 'NL',
+            'DEDENT', 'KW', 'COLON', 'NL',
+            'INDENT', 'KW', 'COLON', 'NL',
+            'INDENT', 'KW', 'COLON', 'NL',
             'INDENT', 'ID', 'DOT', 'ID', 'LSQUARE', 'STRING', 'RSQUARE',
                 'ASSIGN', 'INT', 'NL',
-            'DEDENT', 'BRANCH', 'COLON', 'NL',
+            'DEDENT', 'KW', 'COLON', 'NL',
             'INDENT', 'ID', 'DOT', 'ID', 'LSQUARE', 'STRING', 'RSQUARE',
                 'ASSIGN', 'INT', 'NL',
-            'DEDENT', 'BRANCH', 'COLON', 'NL',
-            'INDENT', 'PASS', 'NL',
+            'DEDENT', 'KW', 'COLON', 'NL',
+            'INDENT', 'KW', 'NL',
             'DEDENT', 'DEDENT', 'DEDENT', 'DEDENT',
         ]
 
