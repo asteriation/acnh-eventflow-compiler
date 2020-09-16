@@ -1,0 +1,6 @@
+.*.s??
+.*.un~
+_unused
+bfevfl
+__pycache__
+env
