@@ -1,7 +1,13 @@
 import unittest
+from typing import Dict, List, Set
 
 from funcparserlib.lexer import Token, LexerError
-from parse import tokenize
+
+from datatype import BoolType, FloatType, IntType, StrType
+from actors import Action, Actor, Param
+from nodes import RootNode, TerminalNode, TerminalNode_, Node
+
+from parse import tokenize, parse
 
 class TestTokenize(unittest.TestCase):
     def test_indent_dedent_simple(self):
@@ -143,4 +149,79 @@ class TestTokenize(unittest.TestCase):
         tokens = list(tokenize(src))
         token_types = [t.type for t in tokens]
         self.assertEqual(token_types, expected)
+
+class TestParser(unittest.TestCase):
+    CASES = [
+        ('empty_flow1', None),
+        ('empty_flow2', None),
+        ('single_action_flow', None),
+    ]
+
+    ACTORS: Dict[str, Actor] = {}
+    TEST_DIR = 'tests/parser/'
+
+    def setUp(self):
+        TestParser.ACTORS = {
+            'TestActor1': Actor('TestActor1'),
+            'TestActor2': Actor('TestActor2'),
+        }
+        for name, actor in TestParser.ACTORS.items():
+            actor.register_action(Action(name, 'Action0', []))
+            actor.register_action(Action(name, 'Action1', [
+                Param('param0', IntType),
+            ]))
+            actor.register_action(Action(name, 'Action2', [
+                Param('param0', StrType),
+            ]))
+            actor.register_action(Action(name, 'Action3', [
+                Param('param0', IntType),
+                Param('param1', StrType),
+                Param('param2', FloatType),
+                Param('param3', BoolType),
+            ]))
+
+    def test_files(self):
+        for c, err in TestParser.CASES:
+            with self.subTest(msg=f'test_{c}'):
+                with open(f'{TestParser.TEST_DIR}/{c}.evfl', 'rt') as ef:
+                    evfl = ef.read()
+
+                tokens = list(tokenize(evfl))
+
+                if err is not None:
+                    with self.assertRaises(err):
+                        parse(tokens, TestParser.ACTORS)
+                else:
+                    rn = parse(tokens, TestParser.ACTORS)
+                    nodes = iter(extract_and_sort_nodes(rn))
+                    with open(f'{TestParser.TEST_DIR}/{c}.out', 'rt') as ef:
+                        for line in ef:
+                            line = line.strip()
+                            if line:
+                                self.assertEqual(str(next(nodes)), line)
+                    with self.assertRaises(StopIteration):
+                        next(nodes)
+
+def __find_postorder_helper(root: Node, visited: Set[str]) -> List[Node]:
+    po: List[Node] = []
+    for node in root.out_edges:
+        if node.name not in visited:
+            visited.add(node.name)
+            po.extend(__find_postorder_helper(node, visited))
+    po.append(root)
+    return po
+
+def __find_postorder(root: Node) -> List[Node]:
+    return __find_postorder_helper(root, set())
+
+def extract_and_sort_nodes(roots: List[RootNode]) -> List[Node]:
+    # order: RootNodes (sort by name), non-Root/TerminalNodes (sort by name), TerminalNode
+    int_nodes: List[Node] = []
+    for root in roots:
+        int_nodes.extend([x for x in __find_postorder(root)
+                if not isinstance(x, (RootNode, TerminalNode_))])
+
+    roots = sorted(roots, key=lambda x: x.name)
+    int_nodes = sorted(int_nodes, key=lambda x: x.name)
+    return roots + int_nodes + [TerminalNode] # type: ignore
 

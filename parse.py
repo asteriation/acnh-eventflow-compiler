@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import re
-from typing import Generator, List, Tuple
+from typing import Dict, Generator, List, Tuple
 
 from funcparserlib.lexer import make_tokenizer, Token, LexerError
+from funcparserlib.parser import a, some, maybe, many, finished, skip
+
+from datatype import BoolType, FloatType, IntType, StrType, Type, TypedValue
+from actors import Param, Action, Actor
+from nodes import Node, RootNode, ActionNode, TerminalNode
 
 def compare_indent(base: str, new: str, pos: Tuple[int, int]) -> int:
     if base.startswith(new):
@@ -118,4 +123,134 @@ def tokenize(string: str) -> Generator[Token, None, None]:
     while indent[-1]:
         indent.pop()
         yield Token('DEDENT', '', start=(num_lines + 1, 0), end=(num_lines + 1, 0))
+
+def parse(seq: List[Token], actors: Dict[str, Actor]) -> List[RootNode]:
+    tokval = lambda x: x.value
+    toktype = lambda t: some(lambda x: x.type == t) >> tokval
+    tok = lambda typ, name: skip(a(Token(typ, name)) >> tokval)
+
+    def make_array(n):
+        if n is None:
+            return []
+        else:
+            return [x for x in [n[0]] + n[1] if x is not None]
+
+    int_ = lambda n: TypedValue(type=IntType, value=int(n))
+    float_ = lambda n: TypedValue(type=FloatType, value=float(n))
+    bool_ = lambda n: TypedValue(type=BoolType, value=(n == 'true'))
+    string = lambda n: TypedValue(type=StrType, value=n)
+    type_ = lambda n: Type(type=n)
+
+    id_ = toktype('ID') >> str
+
+    nid = 0
+    def next_id() -> int:
+        nonlocal nid
+        rv, nid = nid, nid + 1
+        return rv
+
+    def make_action(n):
+        actor_name, action_name, params = n
+        assert actor_name in actors, f'no actor with name "{actor_name}"'
+        assert action_name in actors[actor_name].actions, f'actor "{actor_name}" does not have action with name "{action_name}"'
+
+        action = actors[actor_name].actions[action_name]
+        try:
+            pdict = action.prepare_param_dict(params)
+        except AssertionError as e:
+            raise e # todo: better messages
+
+        return ActionNode(f'Event{next_id()}', action, pdict)
+
+    def make_pass(_):
+        return None
+
+    def make_return(_):
+        return TerminalNode
+
+    def make_flow(n):
+        name, params, body_root = n
+        assert not params, 'vardefs todo'
+        node = RootNode(name, [])
+        node.add_out_edge(body_root)
+        return node
+
+    def link_block(n):
+        if n is None:
+            return TerminalNode
+        n = [x for x in [n[0]] + n[1] if x is not None]
+        if not n:
+            return TerminalNode
+
+        for n1, n2 in zip(n[:-1], n[1:]):
+            n1.add_out_edge(n2)
+        n[-1].add_out_edge(TerminalNode)
+        return n[0]
+
+    def collect_flows(n):
+        if n is None:
+            return []
+        else:
+            return [n[0]] + [x[1] for x in n[1]]
+
+    # value: INT | STRING | FLOAT | BOOL | ID (todo)
+    value = (
+        toktype('INT') >> int_
+        | toktype('FLOAT') >> float_
+        | toktype('BOOL') >> bool_
+        | toktype('STRING') >> string
+    )
+
+    # function_params: | function_params COMMA value
+    function_params = maybe(value + many(tok('COMMA', ',') + value)) >> make_array
+
+    # actor_name: id
+    actor_name = id_
+    # action_name: id
+    action_name = id_
+    # simple_action: actor_name DOT action_name LPAREN function_params RPAREN NL
+    simple_action = (
+        actor_name + tok('DOT', '.') + action_name +
+        tok('LPAREN', '(') + function_params + tok('RPAREN', ')') +
+        tok('NL', '')
+    ) >> make_action
+
+    # action: simple_action (todo: converted actions)
+    action = simple_action
+
+    # pass: PASS NL
+    pass_ = (tok('KW', 'pass') + tok('NL', '')) >> make_pass
+
+    # return: RETURN NL - todo: handle better
+    return_ = (tok('KW', 'return') + tok('NL', '')) >> make_return
+
+    # stmt: action | pass_ | return (todo: queries, blocks)
+    stmt = action | pass_ | return_
+
+    # block_body: stmt | block_body stmt
+    block_body = stmt + many(stmt) >> link_block
+
+    # block: COLON NL INDENT block_body DEDENT
+    block = (
+        tok('COLON', ':') + tok('NL', '') + tok('INDENT', '') +
+        block_body + tok('DEDENT', '')
+    )
+
+    # flow_param: ID COLON TYPE
+    flow_param = id_ + tok('COLON', ':') + (toktype('TYPE') >> type_)
+
+    # flow_params:  | flow_params COMMA flow_param
+    flow_params = maybe(flow_param + many(tok('COMMA', ',') + flow_param)) >> make_array
+
+    # flow: FLOW ID LPAREN flow_params RPAREN block
+    flow = (
+        tok('KW', 'flow') + id_ + tok('LPAREN', '(') +
+        flow_params + tok('RPAREN', ')') + block
+    ) >> make_flow
+
+    # file: | file flow | file NL flow
+    evfl_file = maybe(flow + many(maybe(tok('NL', '')) + flow)) >> collect_flows
+
+    parser = evfl_file + skip(finished)
+    return parser.parse(seq)
 
