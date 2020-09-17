@@ -1,0 +1,4 @@
+flow Test1():
+    TestActor2.Action0()
+
+TestActor1.Action1()

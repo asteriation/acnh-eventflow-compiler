@@ -162,7 +162,7 @@ def parse(seq: List[Token], actors: Dict[str, Actor]) -> List[RootNode]:
 
         return ActionNode(f'Event{next_id()}', action, pdict)
 
-    def make_pass(_):
+    def make_none(_):
         return None
 
     def make_return(_):
@@ -191,7 +191,7 @@ def parse(seq: List[Token], actors: Dict[str, Actor]) -> List[RootNode]:
         if n is None:
             return []
         else:
-            return [n[0]] + [x[1] for x in n[1]]
+            return [x for x in n if x is not None]
 
     # value: INT | STRING | FLOAT | BOOL | ID (todo)
     value = (
@@ -219,7 +219,7 @@ def parse(seq: List[Token], actors: Dict[str, Actor]) -> List[RootNode]:
     action = simple_action
 
     # pass: PASS NL
-    pass_ = (tok('KW', 'pass') + tok('NL', '')) >> make_pass
+    pass_ = (tok('KW', 'pass') + tok('NL', '')) >> make_none
 
     # return: RETURN NL - todo: handle better
     return_ = (tok('KW', 'return') + tok('NL', '')) >> make_return
@@ -248,8 +248,8 @@ def parse(seq: List[Token], actors: Dict[str, Actor]) -> List[RootNode]:
         flow_params + tok('RPAREN', ')') + block
     ) >> make_flow
 
-    # file: | file flow | file NL flow
-    evfl_file = maybe(flow + many(maybe(tok('NL', '')) + flow)) >> collect_flows
+    # file: | file flow | file NL
+    evfl_file = many(flow | (tok('NL', '') >> make_none)) >> collect_flows
 
     parser = evfl_file + skip(finished)
     return parser.parse(seq)

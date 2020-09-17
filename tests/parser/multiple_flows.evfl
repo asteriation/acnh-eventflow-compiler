@@ -1,0 +1,9 @@
+flow Test1():
+    TestActor2.Action0()
+
+
+flow Test2():
+    TestActor2.Action1(3)
+    TestActor1.Action0()
+flow Test3():
+    return

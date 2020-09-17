@@ -2,6 +2,7 @@ import unittest
 from typing import Dict, List, Set
 
 from funcparserlib.lexer import Token, LexerError
+from funcparserlib.parser import NoParseError
 
 from datatype import BoolType, FloatType, IntType, StrType
 from actors import Action, Actor, Param
@@ -155,6 +156,13 @@ class TestParser(unittest.TestCase):
         ('empty_flow1', None),
         ('empty_flow2', None),
         ('single_action_flow', None),
+        ('multi_action_flow', None),
+        ('multiple_flows', None),
+        ('empty', None),
+        ('newlines', None),
+        ('comments_only', None),
+        ('flow_decl_second_line', None),
+        ('err_out_of_flow', NoParseError),
     ]
 
     ACTORS: Dict[str, Actor] = {}

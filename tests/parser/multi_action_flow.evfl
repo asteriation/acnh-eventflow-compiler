@@ -1,0 +1,5 @@
+flow Test():
+    TestActor2.Action0()
+    TestActor1.Action0()
+    TestActor2.Action3(4, 'z', 3.7, false)
+    TestActor2.Action0()

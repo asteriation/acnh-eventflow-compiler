@@ -1,0 +1,7 @@
+RootNode[name=Test, vardefs=[], out_edges=[Event0]]
+ActionNode[name=Event0, action=Action0(), params={}, out_edges=[Event1]]
+ActionNode[name=Event1, action=Action0(), params={}, out_edges=[Event2]]
+ActionNode[name=Event2, action=Action3(param0, param1, param2, param3), params={'param0': TypedValue(type=Type(type='int'), value=4), 'param1': TypedValue(type=Type(type='str'), value="'z'"), 'param2': TypedValue(type=Type(type='float'), value=3.7), 'param3': TypedValue(type=Type(type='bool'), value=False)}, out_edges=[Event3]]
+ActionNode[name=Event3, action=Action0(), params={}, out_edges=[TerminalNode]]
+TerminalNode[]
+
