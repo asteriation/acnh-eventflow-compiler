@@ -19,6 +19,17 @@ class TestTokenize(unittest.TestCase):
         ]
         self.assertEqual(token_types, expected)
 
+    def test_intermediate_dedent_to_zero(self):
+        tokens = list(tokenize('\n a\n  b\n   c\n    d\nabc\n  a'))
+        token_types = [t.type for t in tokens]
+        expected = [
+                'NL', 'INDENT', 'ID', 'NL', 'INDENT', 'ID', 'NL',
+                'INDENT', 'ID', 'NL', 'INDENT', 'ID', 'NL',
+                'DEDENT', 'DEDENT', 'DEDENT', 'DEDENT',
+                'ID', 'NL', 'INDENT', 'ID', 'NL', 'DEDENT',
+        ]
+        self.assertEqual(token_types, expected)
+
     def test_bad_indent(self):
         with self.assertRaises(LexerError):
             list(tokenize('\n\t\n \t'))

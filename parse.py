@@ -54,6 +54,7 @@ def tokenize(string: str) -> Generator[Token, None, None]:
 
     num_lines = len(re.findall(r'\r\n|\r|\n', string))
     last_token = None
+    space_since_nl = False
     for x in t(string):
         if x.type == 'COMMENT':
             continue
@@ -77,7 +78,9 @@ def tokenize(string: str) -> Generator[Token, None, None]:
             if last_token and last_token.type == 'NL':
                 continue
             x = Token('NL', '', start=x.start, end=x.end)
+            space_since_nl = False
         elif x.type == 'SP':
+            space_since_nl = True
             if last_token and last_token.type == 'NL':
                 indent_diff = compare_indent(indent[-1], x.name, x.start)
                 if indent_diff < 0:
@@ -99,6 +102,12 @@ def tokenize(string: str) -> Generator[Token, None, None]:
                     continue
             else:
                 continue
+
+        if x.type != 'INDENT' and last_token and last_token.type == 'NL' and not space_since_nl:
+            while len(indent) > 1:
+                s = indent.pop()
+                last_token = Token('DEDENT', '', start=x.start, end=x.end)
+                yield last_token
 
         last_token = x
         yield last_token
