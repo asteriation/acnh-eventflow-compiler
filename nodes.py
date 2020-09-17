@@ -112,29 +112,26 @@ class ActionNode(Node):
             # f', out_edges=[{", ".join(n.name for n in self.out_edges)}]' + \
             # ']'
 
-# class ForkNode(Node):
-    # def __init__(self, name: str, join_node: JoinNode, forks: List[str]) -> None:
-        # Node.__init__(self, name)
-        # self.join_node = join_node
-        # self.forks = forks
+class ForkNode(Node):
+    def __init__(self, name: str, join_node: JoinNode, forks: List[Node]) -> None:
+        Node.__init__(self, name)
+        self.join_node = join_node
+        self.forks = forks
 
-    # def __str__(self) -> str:
-        # return f'ForkNode[name={self.name}' + \
-            # f', join_node={self.join_node.name}' + \
-            # f', in_edges=[{", ".join(n.name for n in self.in_edges)}]' + \
-            # f', out_edges=[{", ".join(n.name for n in self.out_edges)}]' + \
-            # ']'
+    def __str__(self) -> str:
+        return f'ForkNode[name={self.name}' + \
+            f', join_node={self.join_node.name}' + \
+            f', out_edges=[{", ".join(n.name for n in self.out_edges)}]' + \
+            ']'
 
-# class JoinNode(Node):
-    # def __init__(self, name: str, nxt: Optional[str]) -> None:
-        # Node.__init__(self, name)
-        # self.nxt = nxt
+class JoinNode(Node):
+    def __init__(self, name: str) -> None:
+        Node.__init__(self, name)
 
-    # def __str__(self) -> str:
-        # return f'JoinNode[name={self.name}' + \
-            # f', in_edges=[{", ".join(n.name for n in self.in_edges)}]' + \
-            # f', out_edges=[{", ".join(n.name for n in self.out_edges)}]' + \
-            # ']'
+    def __str__(self) -> str:
+        return f'JoinNode[name={self.name}' + \
+            f', out_edges=[{", ".join(n.name for n in self.out_edges)}]' + \
+            ']'
 
 # class SubflowNode(Node):
     # def __init__(self, name: str, ns: str, called_root_name: str, nxt: Optional[str] = None, params: Optional[Dict[str, Any]] = None) -> None:

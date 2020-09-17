@@ -1,14 +1,15 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 import re
-from typing import Dict, Generator, List, Tuple
+from typing import Any, Dict, Generator, List, Optional, Sequence, Set, Tuple
 
 from funcparserlib.lexer import make_tokenizer, Token, LexerError
-from funcparserlib.parser import a, some, maybe, many, finished, skip
+from funcparserlib.parser import a, some, maybe, many, finished, skip, forward_decl
 
 from datatype import BoolType, FloatType, IntType, StrType, Type, TypedValue
 from actors import Param, Action, Actor
-from nodes import Node, RootNode, ActionNode, TerminalNode
+from nodes import Node, RootNode, ActionNode, JoinNode, ForkNode, TerminalNode
 
 def compare_indent(base: str, new: str, pos: Tuple[int, int]) -> int:
     if base.startswith(new):
@@ -33,7 +34,7 @@ def tokenize(string: str) -> Generator[Token, None, None]:
         ('DOT', (r'\.',)),
         ('COMMA', (r',',)),
         ('TYPE', (r'int|float|str',)),
-        ('KW', (r'flow|internal|entrypoint|if|elif|else|do|while|fork|branch\d+|return|pass|not|and|or|in',)),
+        ('KW', (r'flow|internal|entrypoint|if|elif|else|do|while|fork|branch|return|pass|not|and|or|in',)),
         ('BOOL', (r'true|false',)),
         ('ID', (r'''
             [A-Za-z]
@@ -162,6 +163,20 @@ def parse(seq: List[Token], actors: Dict[str, Actor]) -> List[RootNode]:
 
         return ActionNode(f'Event{next_id()}', action, pdict)
 
+    def make_fork(n):
+        for node in n:
+            assert node is not None, 'empty branch in fork not allowed'
+            __replace_terminal(node, None)
+
+        fork_id, join_id = next_id(), next_id()
+        join = JoinNode(f'Event{join_id}')
+        fork = ForkNode(f'Event{fork_id}', join, n)
+
+        for node in n:
+            fork.add_out_edge(node)
+
+        return fork, join
+
     def make_none(_):
         return None
 
@@ -178,7 +193,10 @@ def parse(seq: List[Token], actors: Dict[str, Actor]) -> List[RootNode]:
     def link_block(n):
         if n is None:
             return TerminalNode
-        n = [x for x in [n[0]] + n[1] if x is not None]
+
+        n = __flatten_nodes(n)
+        n = [x for x in n if x is not None]
+
         if not n:
             return TerminalNode
 
@@ -192,6 +210,8 @@ def parse(seq: List[Token], actors: Dict[str, Actor]) -> List[RootNode]:
             return []
         else:
             return [x for x in n if x is not None]
+
+    block = forward_decl()
 
     # value: INT | STRING | FLOAT | BOOL | ID (todo)
     value = (
@@ -218,20 +238,31 @@ def parse(seq: List[Token], actors: Dict[str, Actor]) -> List[RootNode]:
     # action: simple_action (todo: converted actions)
     action = simple_action
 
+    # branch: BRANCH block NL
+    branch = tok('KW', 'branch') + block
+
+    # branches: branch | branches branch
+    # branchless case handled implicitly by lack of INDENT
+    branches = many(branch)
+
+    # fork: FORK COLON NL INDENT branches DEDENT
+    fork = tok('KW', 'fork') + tok('COLON', ':') + tok('NL', '') + \
+            tok('INDENT', '') + branches + tok('DEDENT', '') >> make_fork
+
     # pass: PASS NL
     pass_ = (tok('KW', 'pass') + tok('NL', '')) >> make_none
 
     # return: RETURN NL
     return_ = (tok('KW', 'return') + tok('NL', '')) >> make_return
 
-    # stmt: action | pass_ | return (todo: queries, blocks)
-    stmt = action | pass_ | return_
+    # stmt: action | fork | pass_ | return (todo: queries, blocks)
+    stmt = action | fork | pass_ | return_
 
     # block_body: stmt | block_body stmt
     block_body = stmt + many(stmt) >> link_block
 
     # block: COLON NL INDENT block_body DEDENT
-    block = (
+    block.define(
         tok('COLON', ':') + tok('NL', '') + tok('INDENT', '') +
         block_body + tok('DEDENT', '')
     )
@@ -254,3 +285,26 @@ def parse(seq: List[Token], actors: Dict[str, Actor]) -> List[RootNode]:
     parser = evfl_file + skip(finished)
     return parser.parse(seq)
 
+def __replace_terminal_helper(root: Node, replacement: Optional[Node], visited: Set[str]) -> None:
+    if TerminalNode in root.out_edges:
+        root.del_out_edge(TerminalNode)
+        if replacement is not None:
+            root.add_out_edge(replacement)
+
+    for node in root.out_edges:
+        if node.name not in visited:
+            visited.add(node.name)
+            __replace_terminal_helper(node, replacement, visited)
+
+def __replace_terminal(root: Node, replacement: Optional[Node]) -> None:
+    __replace_terminal_helper(root, replacement, set())
+
+def __flatten_nodes_helper(lst: Iterable[Any]) -> Generator[Node, None, None]:
+    for x in lst:
+        if isinstance(x, Iterable):
+            yield from __flatten_nodes_helper(x)
+        else:
+            yield x
+
+def __flatten_nodes(lst: Sequence[Any]) -> List[Node]:
+    return list(__flatten_nodes_helper(lst))

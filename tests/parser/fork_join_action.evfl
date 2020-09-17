@@ -1,0 +1,7 @@
+flow Test():
+    fork:
+        branch:
+            TestActor1.Action0()
+        branch:
+            TestActor2.Action0()
+    TestActor1.Action0()

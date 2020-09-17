@@ -1,0 +1,3 @@
+flow Test():
+    fork:
+        Actor1.Action0()

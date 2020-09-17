@@ -120,11 +120,11 @@ class TestTokenize(unittest.TestCase):
                     System.EventFlags['a'] = 3
                 else:
                     fork:
-                        branch0:
+                        branch:
                             System.EventFlags["b"] = 7
-                        branch1:
+                        branch:
                             System.EventFlags["c"] = 7
-                        branch2:
+                        branch:
                             pass'''
         expected = [
             'KW', 'ID', 'LPAREN', 'ID', 'COLON', 'TYPE', 'ASSIGN',
@@ -162,7 +162,12 @@ class TestParser(unittest.TestCase):
         ('newlines', None),
         ('comments_only', None),
         ('flow_decl_second_line', None),
+        ('simple_fork', None),
+        ('fork_join_action', None),
         ('err_out_of_flow', NoParseError),
+        ('err_fork_no_branch', NoParseError),
+        ('err_fork_pass', NoParseError),
+        ('err_fork_action', NoParseError),
     ]
 
     ACTORS: Dict[str, Actor] = {}
@@ -201,14 +206,14 @@ class TestParser(unittest.TestCase):
                         parse(tokens, TestParser.ACTORS)
                 else:
                     rn = parse(tokens, TestParser.ACTORS)
-                    nodes = iter(extract_and_sort_nodes(rn))
+                    actual = [str(x) for x in extract_and_sort_nodes(rn)]
+                    expected = []
                     with open(f'{TestParser.TEST_DIR}/{c}.out', 'rt') as ef:
                         for line in ef:
                             line = line.strip()
                             if line:
-                                self.assertEqual(str(next(nodes)), line)
-                    with self.assertRaises(StopIteration):
-                        next(nodes)
+                                expected.append(line)
+                    self.assertEqual(actual, expected)
 
 def __find_postorder_helper(root: Node, visited: Set[str]) -> List[Node]:
     po: List[Node] = []

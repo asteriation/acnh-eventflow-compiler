@@ -1,0 +1,7 @@
+RootNode[name=Test, vardefs=[], out_edges=[Event2]]
+ActionNode[name=Event0, action=Action0(), params={}, out_edges=[]]
+ActionNode[name=Event1, action=Action0(), params={}, out_edges=[]]
+ForkNode[name=Event2, join_node=Event3, out_edges=[Event0, Event1, Event3]]
+JoinNode[name=Event3, out_edges=[TerminalNode]]
+TerminalNode[]
+
