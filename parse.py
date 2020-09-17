@@ -221,7 +221,7 @@ def parse(seq: List[Token], actors: Dict[str, Actor]) -> List[RootNode]:
     # pass: PASS NL
     pass_ = (tok('KW', 'pass') + tok('NL', '')) >> make_none
 
-    # return: RETURN NL - todo: handle better
+    # return: RETURN NL
     return_ = (tok('KW', 'return') + tok('NL', '')) >> make_return
 
     # stmt: action | pass_ | return (todo: queries, blocks)
