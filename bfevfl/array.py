@@ -17,6 +17,13 @@ class BlockPtrArray(DataBlock):
     def alignment(self) -> int:
         return 8
 
+class BlockArray(ContainerBlock):
+    def __init__(self, items: Sequence[Block]) -> None:
+        super().__init__(items)
+
+    def alignment(self) -> int:
+        return 8
+
 class IntArray(DataBlock):
     def __init__(self, items: Sequence[int]) -> None:
         super().__init__(4 * len(items))

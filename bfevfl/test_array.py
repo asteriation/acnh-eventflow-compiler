@@ -4,10 +4,11 @@ import unittest
 
 from bitstring import Bits, pack
 
-from .block import Block
-from .array import BlockPtrArray, IntArray, BoolArray, FloatArray, StringArray
+from .block import Block, DataBlock
+from .array import BlockPtrArray, BlockArray, IntArray, BoolArray, FloatArray, StringArray
 
 Block.__abstractmethods__ = frozenset()
+DataBlock.__abstractmethods__ = frozenset()
 
 class TestArray(unittest.TestCase):
     def test_blockptr_empty(self):
@@ -22,6 +23,22 @@ class TestArray(unittest.TestCase):
         self.assertEqual(arr.prepare_bitstream(),
                 pack('uintle:64', b.offset) + pack('uintle:64', 0)
         )
+
+    def test_block_empty(self):
+        arr = BlockArray([])
+        self.assertEqual(arr.prepare_bitstream(), Bits(''))
+
+    def test_block(self):
+        b1, b2, b3 = DataBlock(8), DataBlock(3), DataBlock(6)
+        b1.alignment = b2.alignment = b3.alignment = lambda: 1
+        arr = BlockPtrArray([b1, b2, b3])
+
+        b1.buffer.overwrite(Bits(b'abcdefgh'))
+        b2.buffer.overwrite(Bits(b'!@#'))
+        b3.buffer.overwrite(Bits(b'123456'))
+
+        self.assertEqual(len(arr), 8 + 3 + 6)
+        self.assertEqual(arr.prepare_bitstream(), Bits(b'abcdefgh!@#123456'))
 
     def test_int_empty(self):
         arr = IntArray([])
