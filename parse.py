@@ -7,7 +7,7 @@ from typing import Any, Dict, Generator, List, Optional, Sequence, Set, Tuple
 from funcparserlib.lexer import make_tokenizer, Token, LexerError
 from funcparserlib.parser import a, some, maybe, many, finished, skip, forward_decl
 
-from datatype import BoolType, FloatType, IntType, StrType, Type, TypedValue
+from bfevfl.datatype import BoolType, FloatType, IntType, StrType, Type, TypedValue
 from actors import Param, Action, Actor
 from nodes import Node, RootNode, ActionNode, JoinNode, ForkNode, TerminalNode
 

@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Dict, List, NamedTuple, Optional, Union
 
-from datatype import Type, TypedValue
+from bfevfl.datatype import Type, TypedValue
 from actors import Action, Query
 
 class Node(ABC):

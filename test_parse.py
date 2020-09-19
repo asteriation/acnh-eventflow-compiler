@@ -6,7 +6,7 @@ from typing import Dict, List, Set
 from funcparserlib.lexer import Token, LexerError
 from funcparserlib.parser import NoParseError
 
-from datatype import BoolType, FloatType, IntType, StrType
+from bfevfl.datatype import BoolType, FloatType, IntType, StrType
 from actors import Action, Actor, Param
 from nodes import RootNode, TerminalNode, TerminalNode_, Node
 
