@@ -7,7 +7,7 @@ from bitstring import Bits, pack
 from .str_ import StringPool
 from .dic_ import Dictionary
 
-class TestDictioanry(unittest.TestCase):
+class TestDictionary(unittest.TestCase):
     def setUp(self):
         self.sp = StringPool([
             'Root',
