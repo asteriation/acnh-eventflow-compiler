@@ -11,6 +11,7 @@ class String(DataBlock):
     def __init__(self, string: str) -> None:
         # u16 len + string + null terminator
         super().__init__(3 + len(string))
+        self.string = string
 
         self.buffer.overwrite(pack('uintle:16', len(string)))
         self.buffer.overwrite(string.encode('ascii'))
