@@ -30,6 +30,13 @@ class TestDataBlock(unittest.TestCase):
         self.assertEqual(db.prepare_bitstream(), Bits(b'\xf0\xde\xbc\x9a\x78\x56\x34\x12\x34\x12\xf0\xde\xbc\x9a\x78\x56'))
         self.assertEqual(db.get_all_pointers(), [0, 8])
 
+    def test_nullptr(self):
+        db = DataBlock(8)
+        db._add_pointer(0, None)
+
+        self.assertEqual(db.prepare_bitstream(), Bits(b'\0\0\0\0\0\0\0\0'))
+        self.assertEqual(db.get_all_pointers(), [0])
+
 class TestContainerBlock(unittest.TestCase):
     def test_empty_block(self):
         cb = ContainerBlock([])

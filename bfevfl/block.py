@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import abc
-from typing import Any, List, Sequence, Tuple
+from typing import Any, List, Optional, Sequence, Tuple
 
 from bitstring import BitStream, pack
 
@@ -48,15 +48,18 @@ class DataBlock(Block):
         super().__init__()
 
         self.buffer = BitStream(length=length * 8)
-        self.pointers: List[Tuple[int, Block]] = []
+        self.pointers: List[Tuple[int, Optional[Block]]] = []
 
-    def _add_pointer(self, offset: int, block: Block) -> None:
+    def _add_pointer(self, offset: int, block: Optional[Block]) -> None:
         self.pointers.append((offset, block))
 
     def prepare_bitstream(self) -> BitStream:
         for offset, obj in self.pointers:
             with bitstream_offset(self.buffer, offset):
-                self.buffer.overwrite(pack('uintle:64', obj.offset))
+                if obj is not None:
+                    self.buffer.overwrite(pack('uintle:64', obj.offset))
+                else:
+                    self.buffer.overwrite(pack('uintle:64', 0))
         return self.buffer
 
     def get_all_pointers(self) -> List[int]:
