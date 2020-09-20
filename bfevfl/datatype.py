@@ -4,8 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 class Argument(str):
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        str.__init__(*args, **kwargs)
+    pass
 
 @dataclass
 class Type:
@@ -28,6 +27,7 @@ BoolType = Type('bool')
 FloatType = Type('float')
 IntType = Type('int')
 StrType = Type('str')
+ArgumentType = Type('_argument')
 
 @dataclass
 class TypedValue:
