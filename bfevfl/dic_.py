@@ -44,7 +44,7 @@ class _DictionaryHeader(DataBlock):
         return 8
 
 def _get_bit(s: str, bit: int) -> bool:
-    x, i = bit >> 8, bit & 7
+    x, i = (bit >> 3), (bit & 7)
     if x >= len(s):
         return False
     return (ord(s[~x]) & (1 << i)) != 0
@@ -66,9 +66,9 @@ class _PTrieNode:
         branch = self.branches[check]
         if branch is None:
             node = _PTrieNode(s, '', self.index + 1)
-        elif branch is self:
-            node = _PTrieNode(s, self.name, self.index + 1)
-            node.branches[_get_bit(self.name, node.index)] = self
+        elif branch.index <= self.index:
+            node = _PTrieNode(s, branch.name, self.index + 1)
+            node.branches[_get_bit(branch.name, node.index)] = branch
         else:
             return branch.insert(s)
 

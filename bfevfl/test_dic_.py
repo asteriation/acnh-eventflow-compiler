@@ -13,6 +13,16 @@ class TestDictionary(unittest.TestCase):
             'Root',
             'MessageID',
             'MessageWindow',
+            'SubEntryName',
+            'TalkEntryPointName',
+            'IsChangeSameState',
+            'TalkEntryFlowName',
+            'StateName',
+            'IsChangePreState',
+            'ArgFlag0',
+            'ArgInt0',
+            'ArgFloat0',
+            'ArgStr1'
         ])
         self.sp.set_offset(0xbadc0ffee0ddf00d)
 
@@ -49,5 +59,43 @@ class TestDictionary(unittest.TestCase):
         )
         self.assertEqual(dc.get_all_pointers(), [0x10, 0x20, 0x30])
 
-    # todo: larger tests
+    def test_dic_3(self):
+        dc = Dictionary([
+            'SubEntryName',
+            'TalkEntryPointName',
+            'IsChangeSameState',
+            'TalkEntryFlowName',
+            'StateName',
+            'IsChangePreState',
+            'ArgFlag0',
+            'ArgInt0',
+            'ArgFloat0',
+            'ArgStr1'
+        ], self.sp)
+        bs = dc.prepare_bitstream()
+        self.assertEqual(bs,
+                Bits(b'DIC \x0a\0\0\0\xff\xff\xff\xff\1\0\0\0') +
+                pack('uintle:64', self.sp.empty.offset) +
+                Bits(b'\0\0\0\0\7\0\2\0') +
+                pack('uintle:64', self.sp.strings['SubEntryName'].offset) +
+                Bits(b'\x20\0\0\0\x02\0\x03\0') +
+                pack('uintle:64', self.sp.strings['TalkEntryPointName'].offset) +
+                Bits(b'\x21\0\0\0\x05\0\x04\0') +
+                pack('uintle:64', self.sp.strings['IsChangeSameState'].offset) +
+                Bits(b'\x22\0\0\0\x06\0\x0a\0') +
+                pack('uintle:64', self.sp.strings['TalkEntryFlowName'].offset) +
+                Bits(b'\x22\0\0\0\x01\0\x05\0') +
+                pack('uintle:64', self.sp.strings['StateName'].offset) +
+                Bits(b'\x30\0\0\0\x06\0\x03\0') +
+                pack('uintle:64', self.sp.strings['IsChangePreState'].offset) +
+                Bits(b'\x04\0\0\0\x00\0\x08\0') +
+                pack('uintle:64', self.sp.strings['ArgFlag0'].offset) +
+                Bits(b'\x08\0\0\0\x09\0\x07\0') +
+                pack('uintle:64', self.sp.strings['ArgInt0'].offset) +
+                Bits(b'\x10\0\0\0\x08\0\x09\0') +
+                pack('uintle:64', self.sp.strings['ArgFloat0'].offset) +
+                Bits(b'\x24\0\0\0\x0a\0\x04\0') +
+                pack('uintle:64', self.sp.strings['ArgStr1'].offset)
+        )
+        self.assertEqual(dc.get_all_pointers(), [0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80, 0x90, 0xa0, 0xb0])
 
