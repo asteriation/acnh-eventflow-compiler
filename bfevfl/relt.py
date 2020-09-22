@@ -54,7 +54,7 @@ class RelocationTable(ContainerBlock):
     def __init__(self, pointers: List[int]) -> None:
         pointers.sort()
 
-        entries: List[Block] = []
+        entries: List[DataBlock] = []
         start = -1
         bitfield = 0
         for ptr in pointers:
