@@ -7,8 +7,8 @@ from funcparserlib.lexer import Token, LexerError
 from funcparserlib.parser import NoParseError
 
 from bfevfl.datatype import BoolType, FloatType, IntType, StrType
-from actors import Action, Actor, Param
-from nodes import RootNode, TerminalNode, TerminalNode_, Node
+from bfevfl.actors import Action, Actor, Param
+from bfevfl.nodes import RootNode, TerminalNode, TerminalNode_, Node
 
 from parse import tokenize, parse
 

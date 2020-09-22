@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, NamedTuple, Optional, Union
 
-from bfevfl.datatype import AnyType, Type, TypedValue
+from .datatype import Type, TypedValue
 
 class Param(NamedTuple):
     name: str
-    type: Type = AnyType
+    type: Type
 
 class Action:
     def __init__(self, actor_name: str, name: str, params: List[Param]) -> None:
@@ -28,7 +28,7 @@ class Action:
         return f'{name}(' + ', '.join(p.name for p in self.params) + ')'
 
 class Query:
-    def __init__(self, actor_name: str, name: str, params: List[Param], rv: Type = AnyType, inverted: bool = False) -> None:
+    def __init__(self, actor_name: str, name: str, params: List[Param], rv: Type, inverted: bool = False) -> None:
         self.actor_name = actor_name
         self.name = name
         self.params = params

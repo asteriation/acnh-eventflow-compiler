@@ -8,8 +8,8 @@ from funcparserlib.lexer import make_tokenizer, Token, LexerError
 from funcparserlib.parser import a, some, maybe, many, finished, skip, forward_decl
 
 from bfevfl.datatype import BoolType, FloatType, IntType, StrType, Type, TypedValue
-from actors import Param, Action, Actor
-from nodes import Node, RootNode, ActionNode, JoinNode, ForkNode, TerminalNode
+from bfevfl.actors import Param, Action, Actor
+from bfevfl.nodes import Node, RootNode, ActionNode, JoinNode, ForkNode, TerminalNode
 
 def compare_indent(base: str, new: str, pos: Tuple[int, int]) -> int:
     if base.startswith(new):

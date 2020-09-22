@@ -4,8 +4,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Dict, List, NamedTuple, Optional, Union
 
-from bfevfl.datatype import Type, TypedValue
-from actors import Action, Query
+from .datatype import Type, TypedValue
+from .actors import Action, Query
 
 class Node(ABC):
     def __init__(self, name: str) -> None:
@@ -133,22 +133,20 @@ class JoinNode(Node):
             f', out_edges=[{", ".join(n.name for n in self.out_edges)}]' + \
             ']'
 
-# class SubflowNode(Node):
-    # def __init__(self, name: str, ns: str, called_root_name: str, nxt: Optional[str] = None, params: Optional[Dict[str, Any]] = None) -> None:
-        # Node.__init__(self, name)
-        # self.ns = ns
-        # self.called_root_name = called_root_name
-        # self.nxt = nxt
-        # self.params = params.copy() if params else {}
+class SubflowNode(Node):
+    def __init__(self, name: str, ns: str, called_root_name: str, params: Optional[Dict[str, Any]] = None) -> None:
+        Node.__init__(self, name)
+        self.ns = ns
+        self.called_root_name = called_root_name
+        self.params = params.copy() if params else {}
 
-    # def __str__(self) -> str:
-        # return f'SubflowNode[name={self.name}' + \
-            # f', ns={self.ns}' + \
-            # f', called_root_name={self.called_root_name}' + \
-            # f', params={self.params}' + \
-            # f', in_edges=[{", ".join(n.name for n in self.in_edges)}]' + \
-            # f', out_edges=[{", ".join(n.name for n in self.out_edges)}]' + \
-            # ']'
+    def __str__(self) -> str:
+        return f'SubflowNode[name={self.name}' + \
+            f', ns={self.ns}' + \
+            f', called_root_name={self.called_root_name}' + \
+            f', params={self.params}' + \
+            f', out_edges=[{", ".join(n.name for n in self.out_edges)}]' + \
+            ']'
 
 class TerminalNode_(Node):
     def __init__(self) -> None:
