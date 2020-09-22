@@ -31,7 +31,7 @@ class TestArray(unittest.TestCase):
     def test_block(self):
         b1, b2, b3 = DataBlock(8), DataBlock(3), DataBlock(6)
         b1.alignment = b2.alignment = b3.alignment = lambda: 1
-        arr = BlockPtrArray([b1, b2, b3])
+        arr = BlockArray([b1, b2, b3])
 
         b1.buffer.overwrite(Bits(b'abcdefgh'))
         b2.buffer.overwrite(Bits(b'!@#'))
