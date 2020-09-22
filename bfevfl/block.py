@@ -53,6 +53,9 @@ class DataBlock(Block):
     def _add_pointer(self, offset: int, block: Optional[Block]) -> None:
         self.pointers.append((offset, block))
 
+    def _at_offset(self, offset: int, *args: Any, **kwargs: Any) -> bitstream_offset:
+        return bitstream_offset(self.buffer, offset, *args, **kwargs)
+
     def prepare_bitstream(self) -> BitStream:
         for offset, obj in self.pointers:
             with bitstream_offset(self.buffer, offset):

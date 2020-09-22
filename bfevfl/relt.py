@@ -11,13 +11,14 @@ class _RelocationTableHeader(DataBlock):
     def __init__(self) -> None:
         super().__init__(16)
 
-        self.buffer.overwrite(b'RELT')
-        self.buffer.overwrite(pack('uintle:32', 0))
-        self.buffer.overwrite(pack('uintle:32', 1))
+        with self._at_offset(0):
+            self.buffer.overwrite(b'RELT')
+            self.buffer.overwrite(pack('uintle:32', 0))
+            self.buffer.overwrite(pack('uintle:32', 1))
 
     def prepare_bitstream(self) -> BitStream:
-        self.buffer.pos = 32
-        self.buffer.overwrite(pack('uintle:32', self.offset + 8))
+        with self._at_offset(4):
+            self.buffer.overwrite(pack('uintle:32', self.offset + 8))
         return super().prepare_bitstream()
 
     def alignment(self) -> int:
@@ -27,12 +28,12 @@ class _RelocationTableSectionHeader(DataBlock):
     def __init__(self, num_entries: int) -> None:
         super().__init__(0x18)
 
-        self.buffer.pos = 20 * 8
-        self.buffer.overwrite(pack('uintle:32', num_entries))
+        with self._at_offset(20):
+            self.buffer.overwrite(pack('uintle:32', num_entries))
 
     def prepare_bitstream(self) -> BitStream:
-        self.buffer.pos = 12 * 8
-        self.buffer.overwrite(pack('uintle:32', self.offset - 8))
+        with self._at_offset(12):
+            self.buffer.overwrite(pack('uintle:32', self.offset - 8))
         return super().prepare_bitstream()
 
     def alignment(self) -> int:
@@ -42,8 +43,9 @@ class _RelocationTableEntry(DataBlock):
     def __init__(self, offset: int, bitfield: int) -> None:
         super().__init__(8)
 
-        self.buffer.overwrite(pack('uintle:32', offset))
-        self.buffer.overwrite(pack('uintle:32', bitfield))
+        with self._at_offset(0):
+            self.buffer.overwrite(pack('uintle:32', offset))
+            self.buffer.overwrite(pack('uintle:32', bitfield))
 
     def alignment(self) -> int:
         return 4

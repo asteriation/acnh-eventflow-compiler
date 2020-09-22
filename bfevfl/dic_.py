@@ -21,10 +21,10 @@ class _DictionaryItem(DataBlock):
         self._rewrite_block_data()
 
     def _rewrite_block_data(self) -> None:
-        self.buffer.pos = 0
-        self.buffer.overwrite(pack('uintle:32', self.bit_index))
-        self.buffer.overwrite(pack('uintle:16', self.bit0))
-        self.buffer.overwrite(pack('uintle:16', self.bit1))
+        with self._at_offset(0):
+            self.buffer.overwrite(pack('uintle:32', self.bit_index))
+            self.buffer.overwrite(pack('uintle:16', self.bit0))
+            self.buffer.overwrite(pack('uintle:16', self.bit1))
 
     def update_indices(self, bit_index: int, bit0: int, bit1: int) -> None:
         self.bit_index, self.bit0, self.bit1 = bit_index, bit0, bit1
@@ -37,8 +37,9 @@ class _DictionaryHeader(DataBlock):
     def __init__(self, num_nodes: int) -> None:
         super().__init__(8)
 
-        self.buffer.overwrite(b'DIC ')
-        self.buffer.overwrite(pack('uintle:32', num_nodes))
+        with self._at_offset(0):
+            self.buffer.overwrite(b'DIC ')
+            self.buffer.overwrite(pack('uintle:32', num_nodes))
 
     def alignment(self) -> int:
         return 8

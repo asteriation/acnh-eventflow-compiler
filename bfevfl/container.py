@@ -14,9 +14,10 @@ class _ContainerItemHeader(DataBlock):
     def __init__(self, typ: int, n: int, dic: Optional[Dictionary]) -> None:
         super().__init__(0x10)
 
-        self.buffer.overwrite(pack('uintle:8', typ))
-        self.buffer.pos = 16
-        self.buffer.overwrite(pack('uintle:16', n))
+        with self._at_offset(0):
+            self.buffer.overwrite(pack('uintle:8', typ))
+        with self._at_offset(2):
+            self.buffer.overwrite(pack('uintle:16', n))
         self._add_pointer(8, dic)
 
     def alignment(self) -> int:

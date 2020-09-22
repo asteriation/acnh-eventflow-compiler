@@ -13,8 +13,9 @@ class String(DataBlock):
         super().__init__(3 + len(string))
         self.string = string
 
-        self.buffer.overwrite(pack('uintle:16', len(string)))
-        self.buffer.overwrite(string.encode('ascii'))
+        with self._at_offset(0):
+            self.buffer.overwrite(pack('uintle:16', len(string)))
+            self.buffer.overwrite(string.encode('ascii'))
 
     def alignment(self) -> int:
         return 2
@@ -23,10 +24,10 @@ class _StringPoolHeader(DataBlock):
     def __init__(self, num_strings: int) -> None:
         super().__init__(20)
 
-        self.buffer.overwrite(b'STR ')
-
-        self.buffer.pos = 16 * 8
-        self.buffer.overwrite(pack('uintle:32', num_strings))
+        with self._at_offset(0):
+            self.buffer.overwrite(b'STR ')
+        with self._at_offset(16):
+            self.buffer.overwrite(pack('uintle:32', num_strings))
 
     def alignment(self) -> int:
         return 8
