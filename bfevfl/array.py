@@ -11,6 +11,7 @@ class BlockPtrArray(DataBlock):
     def __init__(self, items: Sequence[Block]) -> None:
         super().__init__(8 * len(items))
 
+        self.n = len(items)
         for i, item in enumerate(items):
             self._add_pointer(8 * i, item)
 
@@ -20,6 +21,7 @@ class BlockPtrArray(DataBlock):
 class BlockArray(ContainerBlock):
     def __init__(self, items: Sequence[Block]) -> None:
         super().__init__(items)
+        self.n = len(items)
 
     def alignment(self) -> int:
         return 8
@@ -28,6 +30,7 @@ class IntArray(DataBlock):
     def __init__(self, items: Sequence[int]) -> None:
         super().__init__(4 * len(items))
 
+        self.n = len(items)
         for i, item in enumerate(items):
             self.buffer.overwrite(pack('uintle:32', item))
 
@@ -39,6 +42,7 @@ class BoolArray(DataBlock):
     def __init__(self, items: Sequence[bool]) -> None:
         super().__init__(4 * len(items))
 
+        self.n = len(items)
         for i, item in enumerate(items):
             self.buffer.overwrite(pack('uintle:32', 0x80000001 if item else 0x00000000))
 
@@ -49,6 +53,7 @@ class FloatArray(DataBlock):
     def __init__(self, items: Sequence[float]) -> None:
         super().__init__(4 * len(items))
 
+        self.n = len(items)
         for i, item in enumerate(items):
             self.buffer.overwrite(pack('floatle:32', item))
 
@@ -61,6 +66,7 @@ class StringArray(ContainerBlock):
         for s in sobj:
             s.alignment = lambda: 8
 
+        self.n = len(items)
         super().__init__(sobj)
 
     def alignment(self) -> int:
