@@ -6,9 +6,9 @@ from bitstring import Bits
 
 from .block import Block, DataBlock, ContainerBlock
 
-Block.__abstractmethods__ = frozenset()
-DataBlock.__abstractmethods__ = frozenset()
-ContainerBlock.__abstractmethods__ = frozenset()
+Block.__abstractmethods__ = frozenset() # type: ignore
+DataBlock.__abstractmethods__ = frozenset() # type: ignore
+ContainerBlock.__abstractmethods__ = frozenset() # type: ignore
 
 class TestDataBlock(unittest.TestCase):
     def test_no_pointers(self):

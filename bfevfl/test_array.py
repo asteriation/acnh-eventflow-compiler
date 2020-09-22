@@ -7,8 +7,8 @@ from bitstring import Bits, pack
 from .block import Block, DataBlock
 from .array import BlockPtrArray, BlockArray, IntArray, BoolArray, FloatArray, StringArray
 
-Block.__abstractmethods__ = frozenset()
-DataBlock.__abstractmethods__ = frozenset()
+Block.__abstractmethods__ = frozenset() # type: ignore
+DataBlock.__abstractmethods__ = frozenset() # type: ignore
 
 class TestArray(unittest.TestCase):
     def test_blockptr_empty(self):

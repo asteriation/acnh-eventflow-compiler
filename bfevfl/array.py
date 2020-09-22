@@ -61,13 +61,13 @@ class FloatArray(DataBlock):
         return 4
 
 class StringArray(ContainerBlock):
-    def __init__(self, items: Sequence[str]) -> None:
-        sobj = [String(item) for item in items]
-        for s in sobj:
-            s.alignment = lambda: 8
+    class _String(String):
+        def alignment(self) -> int:
+            return 8
 
+    def __init__(self, items: Sequence[str]) -> None:
+        super().__init__([StringArray._String(item) for item in items])
         self.n = len(items)
-        super().__init__(sobj)
 
     def alignment(self) -> int:
         return 8

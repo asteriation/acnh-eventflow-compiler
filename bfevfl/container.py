@@ -5,7 +5,7 @@ from typing import Dict, List, Optional
 from bitstring import BitStream, pack
 
 from .datatype import TypedValue, Argument
-from .block import DataBlock, ContainerBlock
+from .block import DataBlock, ContainerBlock, Block
 from .str_ import String, StringPool
 from .dic_ import Dictionary
 from .array import BlockPtrArray, IntArray, BoolArray, FloatArray, StringArray
@@ -37,7 +37,7 @@ class ArgumentContainerItem(_ContainerItem):
 class ContainerContainerItem(_ContainerItem):
     def __init__(self, items: Dict[str, TypedValue], pool: StringPool) -> None:
         dic = Dictionary(list(items.keys()), pool)
-        values: List[_ContainerItem] = []
+        values: List[Block] = []
         for item in items.values():
             if item.type.type == 'bool':
                 assert isinstance(item.value, bool)
