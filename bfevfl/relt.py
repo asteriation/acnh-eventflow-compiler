@@ -5,7 +5,7 @@ from typing import List, Optional, Set, Tuple
 
 from bitstring import BitStream, pack
 
-from .block import DataBlock, ContainerBlock
+from .block import DataBlock, ContainerBlock, Block
 
 class _RelocationTableHeader(DataBlock):
     def __init__(self) -> None:
@@ -52,7 +52,7 @@ class RelocationTable(ContainerBlock):
     def __init__(self, pointers: List[int]) -> None:
         pointers.sort()
 
-        entries = []
+        entries: List[Block] = []
         start = -1
         bitfield = 0
         for ptr in pointers:
