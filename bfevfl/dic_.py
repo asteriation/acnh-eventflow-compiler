@@ -108,7 +108,7 @@ class Dictionary(ContainerBlock):
         self.header = _DictionaryHeader(len(strings))
         self.root = _DictionaryItem(pool.empty)
         self.items = OrderedDict(
-            (s, _DictionaryItem(pool.strings[s])) for s in strings
+            (s, _DictionaryItem(pool[s])) for s in strings
         )
 
         indices = _compute_indices(strings)

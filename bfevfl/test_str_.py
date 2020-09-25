@@ -34,9 +34,9 @@ class TestStringPool(unittest.TestCase):
         self.assertEqual(bs, Bits(b'STR \0\0\0\0\0\0\0\0\0\0\0\0\4\0\0\0\0\0\0\0\3\0moo\0\7\0iamacow\0\6\0foobar\0\0\2\0zz\0'))
         self.assertEqual(sp.empty.offset, 10020)
         self.assertEqual(list(sp.strings.keys()), ['moo', 'iamacow', 'foobar', 'zz'])
-        self.assertEqual(sp.strings['moo'].offset, 10024)
-        self.assertEqual(sp.strings['iamacow'].offset, 10030)
-        self.assertEqual(sp.strings['foobar'].offset, 10040)
-        self.assertEqual(sp.strings['zz'].offset, 10050)
+        self.assertEqual(sp['moo'].offset, 10024)
+        self.assertEqual(sp['iamacow'].offset, 10030)
+        self.assertEqual(sp['foobar'].offset, 10040)
+        self.assertEqual(sp['zz'].offset, 10050)
 
 

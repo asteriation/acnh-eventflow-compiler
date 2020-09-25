@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from typing import List
+from typing import Any, List
 
 from bitstring import BitStream, pack
 
@@ -40,3 +40,9 @@ class StringPool(ContainerBlock):
 
         super().__init__([self.header, self.empty] + list(self.strings.values()))
 
+    def __getitem__(self, key: Any) -> String:
+        assert isinstance(key, str)
+        if key == '':
+            return self.empty
+        else:
+            return self.strings[key]
