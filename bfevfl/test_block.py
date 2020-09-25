@@ -35,7 +35,7 @@ class TestDataBlock(unittest.TestCase):
         db._add_pointer(0, None)
 
         self.assertEqual(db.prepare_bitstream(), Bits(b'\0\0\0\0\0\0\0\0'))
-        self.assertEqual(db.get_all_pointers(), [0])
+        self.assertEqual(db.get_all_pointers(), [])
 
 class TestContainerBlock(unittest.TestCase):
     def test_empty_block(self):

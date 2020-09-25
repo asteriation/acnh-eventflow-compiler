@@ -15,31 +15,31 @@ class TestContainer(unittest.TestCase):
     def test_argument_container(self):
         ci = ArgumentContainerItem('arg0')
         self.assertEqual(ci.prepare_bitstream(), Bits(b'\0\0\1\0\0\0\0\0\0\0\0\0\0\0\0\0\4\0arg0\0'))
-        self.assertEqual(ci.get_all_pointers(), [8])
+        self.assertEqual(ci.get_all_pointers(), [])
 
     def test_int_container(self):
         ci = IntContainerItem(0xbaadf00d)
         self.assertEqual(ci.prepare_bitstream(), Bits(b'\2\0\1\0\0\0\0\0\0\0\0\0\0\0\0\0\x0d\xf0\xad\xba'))
-        self.assertEqual(ci.get_all_pointers(), [8])
+        self.assertEqual(ci.get_all_pointers(), [])
 
     def test_bool_container(self):
         ci = BoolContainerItem(True)
         self.assertEqual(ci.prepare_bitstream(), Bits(b'\3\0\1\0\0\0\0\0\0\0\0\0\0\0\0\0\1\0\0\x80'))
-        self.assertEqual(ci.get_all_pointers(), [8])
+        self.assertEqual(ci.get_all_pointers(), [])
 
     def test_float_container(self):
         ci = FloatContainerItem(3.1415)
         self.assertEqual(ci.prepare_bitstream(),
                 Bits(b'\4\0\1\0\0\0\0\0\0\0\0\0\0\0\0\0') + pack('floatle:32', 3.1415)
         )
-        self.assertEqual(ci.get_all_pointers(), [8])
+        self.assertEqual(ci.get_all_pointers(), [])
 
     def test_string_container(self):
         ci = StringContainerItem('FooBar')
         self.assertEqual(ci.prepare_bitstream(),
                 Bits(b'\5\0\1\0\0\0\0\0\0\0\0\0\0\0\0\0\6\0FooBar\0')
         )
-        self.assertEqual(ci.get_all_pointers(), [8])
+        self.assertEqual(ci.get_all_pointers(), [])
 
     def test_container_small_1(self):
         sp = StringPool(['MessageID', 'MessageWindow'])

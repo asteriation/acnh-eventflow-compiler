@@ -66,7 +66,7 @@ class DataBlock(Block):
         return self.buffer
 
     def get_all_pointers(self) -> List[int]:
-        return sorted([x + self.offset for x, _ in self.pointers])
+        return sorted([x + self.offset for x, p in self.pointers if p is not None])
 
     @abc.abstractmethod
     def alignment(self) -> int:
