@@ -217,13 +217,13 @@ class TestParser(unittest.TestCase):
                     self.assertEqual(actual, expected)
 
 def extract_and_sort_nodes(roots: List[RootNode]) -> List[Node]:
-    # order: RootNodes (sort by name), non-Root/TerminalNodes (sort by name), TerminalNode
+    # order: RootNodes (sort by name), non-Root (sort by name)
     int_nodes: List[Node] = []
     for root in roots:
         int_nodes.extend([x for x in find_postorder(root)
-                if not isinstance(x, (RootNode, TerminalNode_))])
+                if not isinstance(x, RootNode)])
 
     roots = sorted(roots, key=lambda x: x.name)
     int_nodes = sorted(int_nodes, key=lambda x: x.name)
-    return roots + int_nodes + [TerminalNode] # type: ignore
+    return roots + int_nodes # type: ignore
 

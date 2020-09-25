@@ -286,7 +286,11 @@ def parse(seq: List[Token], gen_actor: Callable[[str], Actor]) -> Tuple[List[Roo
     evfl_file = many(flow | (tok('NL', '') >> make_none)) >> collect_flows
 
     parser = evfl_file + skip(finished)
-    return parser.parse(seq), list(actors.values())
+    roots: List[RootNode] = parser.parse(seq)
+    for n in roots:
+        __replace_terminal(n, None)
+
+    return roots, list(actors.values())
 
 def __replace_terminal_helper(root: Node, replacement: Optional[Node], visited: Set[str]) -> None:
     if TerminalNode in root.out_edges:
