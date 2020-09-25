@@ -141,7 +141,7 @@ def parse(seq: List[Token], gen_actor: Callable[[str], Actor]) -> Tuple[List[Roo
     int_ = lambda n: TypedValue(type=IntType, value=int(n))
     float_ = lambda n: TypedValue(type=FloatType, value=float(n))
     bool_ = lambda n: TypedValue(type=BoolType, value=(n == 'true'))
-    string = lambda n: TypedValue(type=StrType, value=n)
+    string = lambda n: TypedValue(type=StrType, value=n[1:-1])
     type_ = lambda n: Type(type=n)
 
     id_ = toktype('ID') >> str
