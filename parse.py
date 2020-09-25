@@ -154,6 +154,7 @@ def parse(seq: List[Token], gen_actor: Callable[[str], Actor]) -> Tuple[List[Roo
 
     def make_action(n):
         actor_name, action_name, params = n
+        action_name = f'EventFlowAction{action_name}'
         if actor_name not in actors:
             actors[actor_name] = gen_actor(actor_name)
         assert action_name in actors[actor_name].actions, f'no action with name "{action_name}" found'

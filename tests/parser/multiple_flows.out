@@ -1,7 +1,7 @@
 RootNode[name=Test1, vardefs=[], out_edges=[Event0]]
 RootNode[name=Test2, vardefs=[], out_edges=[Event1]]
 RootNode[name=Test3, vardefs=[], out_edges=[]]
-ActionNode[name=Event0, action=Action0(), params={}, out_edges=[]]
-ActionNode[name=Event1, action=Action1(param0), params={'param0': TypedValue(type=Type(type='int'), value=3)}, out_edges=[Event2]]
-ActionNode[name=Event2, action=Action0(), params={}, out_edges=[]]
+ActionNode[name=Event0, action=EventFlowActionAction0(), params={}, out_edges=[]]
+ActionNode[name=Event1, action=EventFlowActionAction1(param0), params={'param0': TypedValue(type=Type(type='int'), value=3)}, out_edges=[Event2]]
+ActionNode[name=Event2, action=EventFlowActionAction0(), params={}, out_edges=[]]
 

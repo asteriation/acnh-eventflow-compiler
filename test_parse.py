@@ -178,14 +178,14 @@ class TestParser(unittest.TestCase):
     def generate_actor(self, name: str) -> Actor:
         actor = Actor(name)
 
-        actor.register_action(Action(name, 'Action0', []))
-        actor.register_action(Action(name, 'Action1', [
+        actor.register_action(Action(name, 'EventFlowActionAction0', []))
+        actor.register_action(Action(name, 'EventFlowActionAction1', [
             Param('param0', IntType),
         ]))
-        actor.register_action(Action(name, 'Action2', [
+        actor.register_action(Action(name, 'EventFlowActionAction2', [
             Param('param0', StrType),
         ]))
-        actor.register_action(Action(name, 'Action3', [
+        actor.register_action(Action(name, 'EventFlowActionAction3', [
             Param('param0', IntType),
             Param('param1', StrType),
             Param('param2', FloatType),
