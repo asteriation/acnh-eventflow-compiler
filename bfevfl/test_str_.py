@@ -19,6 +19,15 @@ class TestStr(unittest.TestCase):
         bs = String('abcdef').prepare_bitstream()
         self.assertEqual(bs, Bits(b'\6\0abcdef\0'))
 
+    def test_cstr_base(self):
+        bs = String('zxcvased')
+        self.assertEqual(bs.c_str.offset, 2)
+
+    def test_cstr_relocated(self):
+        bs = String('zxcvased')
+        bs.set_offset(123456)
+        self.assertEqual(bs.c_str.offset, 123458)
+
 class TestStringPool(unittest.TestCase):
     def test_empty_pool(self):
         sp = StringPool([])

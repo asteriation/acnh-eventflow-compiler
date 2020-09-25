@@ -5,7 +5,20 @@ from typing import Any, List
 
 from bitstring import BitStream, pack
 
-from .block import DataBlock, ContainerBlock
+from .block import Block, DataBlock, ContainerBlock
+
+class _CString(Block):
+    def prepare_bitstream(self) -> BitStream:
+        raise RuntimeError('not supported')
+
+    def get_all_pointers(self) -> List[int]:
+        raise RuntimeError('not supported')
+
+    def alignment(self) -> int:
+        raise RuntimeError('not supported')
+
+    def __len__(self) -> int:
+        raise RuntimeError('not supported')
 
 class String(DataBlock):
     def __init__(self, string: str) -> None:
@@ -13,9 +26,16 @@ class String(DataBlock):
         super().__init__(3 + len(string))
         self.string = string
 
+        self.c_str = _CString()
+        self.c_str.set_offset(2)
+
         with self._at_offset(0):
             self.buffer.overwrite(pack('uintle:16', len(string)))
             self.buffer.overwrite(string.encode('ascii'))
+
+    def set_offset(self, offset: int) -> None:
+        self.c_str.set_offset(offset + 2)
+        super().set_offset(offset)
 
     def alignment(self) -> int:
         return 2
