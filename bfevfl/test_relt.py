@@ -13,8 +13,8 @@ class TestRelocationTable(unittest.TestCase):
 
         bs = dc.prepare_bitstream()
         self.assertEqual(bs,
-                Bits(b'RELT\x15\xf0\xad\xba\1\0\0\0\0\0\0\0') +
-                Bits(b'\0\0\0\0\0\0\0\0\0\0\0\0\x15\xf0\xad\xba\0\0\0\0\0\0\0\0')
+                Bits(b'RELT\x0d\xf0\xad\xba\1\0\0\0\0\0\0\0') +
+                Bits(b'\0\0\0\0\0\0\0\0\0\0\0\0\x0d\xf0\xad\xba\0\0\0\0\0\0\0\0')
         )
         self.assertEqual(dc.get_all_pointers(), [])
 
@@ -24,8 +24,8 @@ class TestRelocationTable(unittest.TestCase):
 
         bs = dc.prepare_bitstream()
         self.assertEqual(bs,
-                Bits(b'RELT\x15\xf0\xad\xba\1\0\0\0\0\0\0\0') +
-                Bits(b'\0\0\0\0\0\0\0\0\0\0\0\0\x15\xf0\xad\xba\0\0\0\0\1\0\0\0') +
+                Bits(b'RELT\x0d\xf0\xad\xba\1\0\0\0\0\0\0\0') +
+                Bits(b'\0\0\0\0\0\0\0\0\0\0\0\0\x0d\xf0\xad\xba\0\0\0\0\1\0\0\0') +
                 Bits(b'\0\4\0\0\x0b\x00\x00\x80')
         )
         self.assertEqual(dc.get_all_pointers(), [])
@@ -36,8 +36,8 @@ class TestRelocationTable(unittest.TestCase):
 
         bs = dc.prepare_bitstream()
         self.assertEqual(bs,
-                Bits(b'RELT\x15\xf0\xad\xba\1\0\0\0\0\0\0\0') +
-                Bits(b'\0\0\0\0\0\0\0\0\0\0\0\0\x15\xf0\xad\xba\0\0\0\0\3\0\0\0') +
+                Bits(b'RELT\x0d\xf0\xad\xba\1\0\0\0\0\0\0\0') +
+                Bits(b'\0\0\0\0\0\0\0\0\0\0\0\0\x0d\xf0\xad\xba\0\0\0\0\3\0\0\0') +
                 Bits(b'\0\4\0\0\x0b\x00\x00\x80') +
                 Bits(b'\0\5\0\0\x01\x00\x00\x00') +
                 Bits(b'\x80\x09\0\0\x01\x00\x00\x00')

@@ -18,7 +18,7 @@ class _RelocationTableHeader(DataBlock):
 
     def prepare_bitstream(self) -> BitStream:
         with self._at_offset(4):
-            self.buffer.overwrite(pack('uintle:32', self.offset + 8))
+            self.buffer.overwrite(pack('uintle:32', self.offset))
         return super().prepare_bitstream()
 
     def alignment(self) -> int:
@@ -33,7 +33,7 @@ class _RelocationTableSectionHeader(DataBlock):
 
     def prepare_bitstream(self) -> BitStream:
         with self._at_offset(12):
-            self.buffer.overwrite(pack('uintle:32', self.offset - 8))
+            self.buffer.overwrite(pack('uintle:32', self.offset - 16))
         return super().prepare_bitstream()
 
     def alignment(self) -> int:
