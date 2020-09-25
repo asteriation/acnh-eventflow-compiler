@@ -166,7 +166,7 @@ class Test_FlowchartHeader(unittest.TestCase):
         self.assertEqual(header.prepare_bitstream(),
                 Bits(b'EVFL\0\0\x08\0\0\0\0\0\0\0\0\0') +
                 Bits(b'\5\0\3\0\7\0\1\0\4\0\0\0\0\0\0\0') +
-                pack('uintle:64', pool['Flowchart'].offset + 2) +
+                pack('uintle:64', pool['Flowchart'].offset) +
                 pack('uintle:64', actors.offset) +
                 pack('uintle:64', events.offset) +
                 pack('uintle:64', entrypoint_names.offset) +
@@ -186,7 +186,7 @@ class TestFlowchart(unittest.TestCase):
         self.assertEqual(fc.prepare_bitstream(),
             Bits(b'EVFL\x34\x12\0\0\0\0\0\0\0\0\0\0') +
             Bits(b'\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0') +
-            pack('uintle:64', self.sp['Flowchart'].offset + 2) +
+            pack('uintle:64', self.sp['Flowchart'].offset) +
             Bits(b'\x48\0\0\0\0\0\0\0\x48\0\0\0\0\0\0\0') +
             Bits(b'\x48\0\0\0\0\0\0\0\x60\0\0\0\0\0\0\0') +
             Bits(b'DIC \0\0\0\0\xff\xff\xff\xff\0\0\0\0') +

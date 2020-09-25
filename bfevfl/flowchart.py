@@ -184,7 +184,7 @@ class _FlowchartHeader(DataBlock):
             self.buffer.overwrite(pack('uintle:16', num_queries))
             self.buffer.overwrite(pack('uintle:16', events.n))
             self.buffer.overwrite(pack('uintle:16', entrypoints.n))
-        self._add_pointer(0x20, pool[name].c_str)
+        self._add_pointer(0x20, pool[name])
         self._add_pointer(0x28, actors)
         self._add_pointer(0x30, events)
         self._add_pointer(0x38, entrypoint_names)
