@@ -61,6 +61,5 @@ class TestFile(unittest.TestCase):
             expected = f.read()
 
         file = File('Ftr_Toilet', [sys_actor, player_actor], nodes)
-        print(file.prepare_bitstream().bytes)
         self.assertEqual(file.prepare_bitstream(), Bits(expected))
 
