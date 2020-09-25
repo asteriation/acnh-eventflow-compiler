@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-from typing import Optional, Sequence
+from typing import Generic, Optional, Sequence, TypeVar
 
 from bitstring import BitStream, pack
 
 from .str_ import String
 from .block import Block, DataBlock, ContainerBlock
 
-class BlockPtrArray(DataBlock):
-    def __init__(self, items: Sequence[Block]) -> None:
+T = TypeVar('T', bound='Block')
+
+class BlockPtrArray(DataBlock, Generic[T]):
+    def __init__(self, items: Sequence[T]) -> None:
         super().__init__(8 * len(items))
 
         self.n = len(items)
@@ -18,8 +20,8 @@ class BlockPtrArray(DataBlock):
     def alignment(self) -> int:
         return 8
 
-class BlockArray(ContainerBlock):
-    def __init__(self, items: Sequence[Block]) -> None:
+class BlockArray(ContainerBlock, Generic[T]):
+    def __init__(self, items: Sequence[T]) -> None:
         super().__init__(items)
         self.n = len(items)
 
