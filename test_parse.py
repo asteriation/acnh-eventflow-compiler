@@ -11,6 +11,7 @@ from bfevfl.actors import Action, Actor, Param
 from bfevfl.nodes import RootNode, TerminalNode, TerminalNode_, Node
 
 from parse import tokenize, parse
+from util import find_postorder
 
 class TestTokenize(unittest.TestCase):
     def test_indent_dedent_simple(self):
@@ -215,23 +216,11 @@ class TestParser(unittest.TestCase):
                                 expected.append(line)
                     self.assertEqual(actual, expected)
 
-def __find_postorder_helper(root: Node, visited: Set[str]) -> List[Node]:
-    po: List[Node] = []
-    for node in root.out_edges:
-        if node.name not in visited:
-            visited.add(node.name)
-            po.extend(__find_postorder_helper(node, visited))
-    po.append(root)
-    return po
-
-def __find_postorder(root: Node) -> List[Node]:
-    return __find_postorder_helper(root, set())
-
 def extract_and_sort_nodes(roots: List[RootNode]) -> List[Node]:
     # order: RootNodes (sort by name), non-Root/TerminalNodes (sort by name), TerminalNode
     int_nodes: List[Node] = []
     for root in roots:
-        int_nodes.extend([x for x in __find_postorder(root)
+        int_nodes.extend([x for x in find_postorder(root)
                 if not isinstance(x, (RootNode, TerminalNode_))])
 
     roots = sorted(roots, key=lambda x: x.name)
