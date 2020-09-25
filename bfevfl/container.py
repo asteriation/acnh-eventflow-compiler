@@ -28,10 +28,11 @@ class _ContainerItem(ContainerBlock):
 
 class ArgumentContainerItem(_ContainerItem):
     def __init__(self, arg: str) -> None:
-        # TODO: verify
+        arr = StringArray([arg])
         super().__init__([
             _ContainerItemHeader(0, 1, None),
-            String(arg),
+            BlockPtrArray([arr]),
+            arr,
         ])
 
 class ContainerContainerItem(_ContainerItem):
@@ -86,37 +87,11 @@ class FloatContainerItem(_ContainerItem):
 
 class StringContainerItem(_ContainerItem):
     def __init__(self, value: str) -> None:
+        arr = StringArray([value])
         super().__init__([
             _ContainerItemHeader(5, 1, None),
-            StringArray([value])
-        ])
-
-class IntArrayContainerItem(_ContainerItem):
-    def __init__(self, values: List[int]) -> None:
-        super().__init__([
-            _ContainerItemHeader(7, 1, None),
-            IntArray(values)
-        ])
-
-class BoolArrayContainerItem(_ContainerItem):
-    def __init__(self, values: List[bool]) -> None:
-        super().__init__([
-            _ContainerItemHeader(8, 1, None),
-            BoolArray(values)
-        ])
-
-class FloatArrayContainerItem(_ContainerItem):
-    def __init__(self, values: List[float]) -> None:
-        super().__init__([
-            _ContainerItemHeader(9, 1, None),
-            FloatArray(values)
-        ])
-
-class StringArrayContainerItem(_ContainerItem):
-    def __init__(self, values: List[str]) -> None:
-        super().__init__([
-            _ContainerItemHeader(10, 1, None),
-            StringArray(values)
+            BlockPtrArray([arr]),
+            arr,
         ])
 
 Container = ContainerContainerItem

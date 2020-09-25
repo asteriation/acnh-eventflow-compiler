@@ -14,8 +14,8 @@ from .container import ArgumentContainerItem, IntContainerItem, BoolContainerIte
 class TestContainer(unittest.TestCase):
     def test_argument_container(self):
         ci = ArgumentContainerItem('arg0')
-        self.assertEqual(ci.prepare_bitstream(), Bits(b'\0\0\1\0\0\0\0\0\0\0\0\0\0\0\0\0\4\0arg0\0'))
-        self.assertEqual(ci.get_all_pointers(), [])
+        self.assertEqual(ci.prepare_bitstream(), Bits(b'\0\0\1\0\0\0\0\0\0\0\0\0\0\0\0\0\x18\0\0\0\0\0\0\0\4\0arg0\0'))
+        self.assertEqual(ci.get_all_pointers(), [16])
 
     def test_int_container(self):
         ci = IntContainerItem(0xbaadf00d)
@@ -37,9 +37,9 @@ class TestContainer(unittest.TestCase):
     def test_string_container(self):
         ci = StringContainerItem('FooBar')
         self.assertEqual(ci.prepare_bitstream(),
-                Bits(b'\5\0\1\0\0\0\0\0\0\0\0\0\0\0\0\0\6\0FooBar\0')
+                Bits(b'\5\0\1\0\0\0\0\0\0\0\0\0\0\0\0\0\x18\0\0\0\0\0\0\0\6\0FooBar\0')
         )
-        self.assertEqual(ci.get_all_pointers(), [])
+        self.assertEqual(ci.get_all_pointers(), [16])
 
     def test_container_small_1(self):
         sp = StringPool(['MessageID', 'MessageWindow'])
@@ -50,7 +50,9 @@ class TestContainer(unittest.TestCase):
             ('MessageWindow', TypedValue(BoolType, True))
         )), sp)
         dict_bs = Dictionary(['MessageID', 'MessageWindow'], sp).prepare_bitstream()
-        str_bs = StringContainerItem('FooBarBaz').prepare_bitstream()
+        sci = StringContainerItem('FooBarBaz')
+        sci.set_offset(0x58)
+        str_bs = sci.prepare_bitstream()
         bool_bs = BoolContainerItem(True).prepare_bitstream()
         str_pad = len(dict_bs) // 8 % 8
         str_offset = math.ceil(len(dict_bs) // 8 / 8) * 8
@@ -76,7 +78,9 @@ class TestContainer(unittest.TestCase):
         dict_bs = Dictionary(['MessageID', 'MessageWindow', 'Test'], sp).prepare_bitstream()
         int_bs = IntContainerItem(12345678).prepare_bitstream()
         float_bs = FloatContainerItem(3.1415).prepare_bitstream()
-        arg_bs = ArgumentContainerItem('arg0').prepare_bitstream()
+        aci = ArgumentContainerItem('arg0')
+        aci.set_offset(0xa0)
+        arg_bs = aci.prepare_bitstream()
 
         int_pad = len(dict_bs) // 8 % 8
         int_offset = math.ceil(len(dict_bs) // 8 / 8) * 8
