@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from typing import Any, List
+from typing import Any, List, Sequence
 
 from bitstring import BitStream, pack
 
@@ -53,7 +53,7 @@ class _StringPoolHeader(DataBlock):
         return 8
 
 class StringPool(ContainerBlock):
-    def __init__(self, strings: List[str]) -> None:
+    def __init__(self, strings: Sequence[str]) -> None:
         self.header = _StringPoolHeader(len(strings))
         self.empty = String('')
         self.strings = OrderedDict((s, String(s)) for s in strings)
