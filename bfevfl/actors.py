@@ -13,6 +13,7 @@ class Action:
         self.actor_name = actor_name
         self.name = name
         self.params = params
+        self.used = False
 
     def prepare_param_dict(self, params: List[TypedValue]) -> Dict[str, TypedValue]:
         assert len(self.params) == len(params), f'{self.name}: expected {len(self.params)} params, got {len(params)}'
@@ -22,6 +23,9 @@ class Action:
             d[param.name] = value
 
         return d
+
+    def mark_used(self) -> None:
+        self.used = True
 
     def __str__(self) -> str:
         name = self.name
@@ -35,6 +39,10 @@ class Query:
         self.rv = rv
         self.inverted = inverted
         self.num_values = rv.num_values()
+        self.used = False
+
+    def mark_used(self) -> None:
+        self.used = True
 
     def __str__(self) -> str:
         name = self.name
@@ -48,10 +56,11 @@ class Actor:
         self.locked = False
 
     def register_action(self, action: Action) -> None:
-        if action.name not in self.actions or True:
+        if action.name not in self.actions:
             self.actions[action.name] = action
-            # if self.locked:
-                # action.auto = True
+
+    def use_action(self, action: Action) -> None:
+        self.actions[action.name].mark_used()
 
     def register_query(self, query: Query) -> None:
         if query.name not in self.queries or True: # TODO
