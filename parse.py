@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 import re
-from typing import Any, Dict, Generator, List, Optional, Sequence, Set, Tuple
+from typing import Any, Callable, Dict, Generator, List, Optional, Sequence, Set, Tuple
 
 from funcparserlib.lexer import make_tokenizer, Token, LexerError
 from funcparserlib.parser import a, some, maybe, many, finished, skip, forward_decl
@@ -125,7 +125,9 @@ def tokenize(string: str) -> Generator[Token, None, None]:
         indent.pop()
         yield Token('DEDENT', '', start=(num_lines + 1, 0), end=(num_lines + 1, 0))
 
-def parse(seq: List[Token], actors: Dict[str, Actor]) -> List[RootNode]:
+def parse(seq: List[Token], gen_actor: Callable[[str], Actor]) -> Tuple[List[RootNode], List[Actor]]:
+    actors: Dict[str, Actor] = {}
+
     tokval = lambda x: x.value
     toktype = lambda t: some(lambda x: x.type == t) >> tokval
     tok = lambda typ, name: skip(a(Token(typ, name)) >> tokval)
@@ -152,8 +154,9 @@ def parse(seq: List[Token], actors: Dict[str, Actor]) -> List[RootNode]:
 
     def make_action(n):
         actor_name, action_name, params = n
-        assert actor_name in actors, f'no actor with name "{actor_name}"'
-        assert action_name in actors[actor_name].actions, f'actor "{actor_name}" does not have action with name "{action_name}"'
+        if actor_name not in actors:
+            actors[actor_name] = gen_actor(actor_name)
+        assert action_name in actors[actor_name].actions, f'no action with name "{action_name}" found'
 
         action = actors[actor_name].actions[action_name]
         try:
@@ -283,7 +286,7 @@ def parse(seq: List[Token], actors: Dict[str, Actor]) -> List[RootNode]:
     evfl_file = many(flow | (tok('NL', '') >> make_none)) >> collect_flows
 
     parser = evfl_file + skip(finished)
-    return parser.parse(seq)
+    return parser.parse(seq), list(actors.values())
 
 def __replace_terminal_helper(root: Node, replacement: Optional[Node], visited: Set[str]) -> None:
     if TerminalNode in root.out_edges:

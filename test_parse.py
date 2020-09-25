@@ -172,28 +172,26 @@ class TestParser(unittest.TestCase):
         ('err_fork_action', NoParseError),
     ]
 
-    ACTORS: Dict[str, Actor] = {}
     TEST_DIR = 'tests/parser/'
 
-    def setUp(self):
-        TestParser.ACTORS = {
-            'TestActor1': Actor('TestActor1'),
-            'TestActor2': Actor('TestActor2'),
-        }
-        for name, actor in TestParser.ACTORS.items():
-            actor.register_action(Action(name, 'Action0', []))
-            actor.register_action(Action(name, 'Action1', [
-                Param('param0', IntType),
-            ]))
-            actor.register_action(Action(name, 'Action2', [
-                Param('param0', StrType),
-            ]))
-            actor.register_action(Action(name, 'Action3', [
-                Param('param0', IntType),
-                Param('param1', StrType),
-                Param('param2', FloatType),
-                Param('param3', BoolType),
-            ]))
+    def generate_actor(self, name: str) -> Actor:
+        actor = Actor(name)
+
+        actor.register_action(Action(name, 'Action0', []))
+        actor.register_action(Action(name, 'Action1', [
+            Param('param0', IntType),
+        ]))
+        actor.register_action(Action(name, 'Action2', [
+            Param('param0', StrType),
+        ]))
+        actor.register_action(Action(name, 'Action3', [
+            Param('param0', IntType),
+            Param('param1', StrType),
+            Param('param2', FloatType),
+            Param('param3', BoolType),
+        ]))
+
+        return actor
 
     def test_files(self):
         for c, err in TestParser.CASES:
@@ -205,9 +203,9 @@ class TestParser(unittest.TestCase):
 
                 if err is not None:
                     with self.assertRaises(err):
-                        parse(tokens, TestParser.ACTORS)
+                        parse(tokens, self.generate_actor)
                 else:
-                    rn = parse(tokens, TestParser.ACTORS)
+                    rn, actors = parse(tokens, self.generate_actor)
                     actual = [str(x) for x in extract_and_sort_nodes(rn)]
                     expected = []
                     with open(f'{TestParser.TEST_DIR}/{c}.out', 'rt') as ef:
