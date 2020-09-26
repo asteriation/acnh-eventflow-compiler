@@ -13,8 +13,8 @@ from bfevfl.file import File
 from parse import tokenize, parse
 from util import find_postorder
 
-def actor_gen(name: str) -> Actor:
-    actor = Actor(name)
+def actor_gen(name: str, secondary_name: str) -> Actor:
+    actor = Actor(name, secondary_name)
     actor.register_action(Action(name, 'EventFlowActionWaitFrame', [Param('WaitFrame', IntType)]))
     actor.register_action(Action(name, 'EventFlowActionPlayerClearFoodPowerup', []))
     actor.register_action(Action(name, 'EventFlowActionOpenMessageWindow', [Param('MessageID', StrType), Param('IsCloseMessageWindow', BoolType)]))

@@ -49,11 +49,11 @@ class Query:
         return f'{name}(' + ', '.join(p.name for p in self.params) + ')'
 
 class Actor:
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str, secondary_name: str = '') -> None:
         self.name = name
+        self.secondary_name = secondary_name
         self.actions: Dict[str, Action] = {}
         self.queries: Dict[str, Query] = {}
-        self.locked = False
 
     def register_action(self, action: Action) -> None:
         if action.name not in self.actions:
@@ -65,11 +65,6 @@ class Actor:
     def register_query(self, query: Query) -> None:
         if query.name not in self.queries or True: # TODO
             self.queries[query.name] = query
-            # if self.locked:
-                # query.auto = True
-
-    def lock_registration(self) -> None:
-        self.locked = True
 
     def __str__(self):
         return f'Actor {self.name}\n' + '\n'.join([

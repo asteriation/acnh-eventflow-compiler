@@ -80,6 +80,10 @@ class TestTokenize(unittest.TestCase):
         with self.assertRaises(LexerError):
             list(tokenize('['))
 
+    def test_nonstart_annotation(self):
+        with self.assertRaises(LexerError):
+            list(tokenize(' @'))
+
     def test_id(self):
         with self.assertRaises(LexerError):
             next(tokenize('-abc'))
@@ -167,6 +171,7 @@ class TestParser(unittest.TestCase):
         ('flow_decl_second_line', None),
         ('simple_fork', None),
         ('fork_join_action', None),
+        ('annotation', None),
         ('err_out_of_flow', NoParseError),
         ('err_fork_no_branch', NoParseError),
         ('err_fork_pass', NoParseError),
@@ -175,8 +180,8 @@ class TestParser(unittest.TestCase):
 
     TEST_DIR = 'tests/parser/'
 
-    def generate_actor(self, name: str) -> Actor:
-        actor = Actor(name)
+    def generate_actor(self, name: str, secondary_name: str) -> Actor:
+        actor = Actor(name, secondary_name)
 
         actor.register_action(Action(name, 'EventFlowActionAction0', []))
         actor.register_action(Action(name, 'EventFlowActionAction1', [

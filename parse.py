@@ -20,6 +20,7 @@ def compare_indent(base: str, new: str, pos: Tuple[int, int]) -> int:
 
 def tokenize(string: str) -> Generator[Token, None, None]:
     specs = [
+        ('ANNOTATION', (r'@[^\r\n]*\r?\n',)),
         ('COMMENT', (r'#[^\r\n]*',)),
         ('SP', (r'[ \t]+',)),
         ('NL', (r'[\r\n]+',)),
@@ -61,7 +62,13 @@ def tokenize(string: str) -> Generator[Token, None, None]:
     num_lines = len(re.findall(r'\r\n|\r|\n', string))
     last_token = None
     space_since_nl = False
+    first_non_annotation = False
     for x in t(string):
+        if x.type != 'ANNOTATION':
+            first_non_annotation = True
+        if first_non_annotation and x.type == 'ANNOTATION':
+            raise LexerError(x.start, "unexpected '@' - annotations must be at the top of the file")
+
         if x.type == 'COMMENT':
             continue
         elif x.type == 'LPAREN':
@@ -125,8 +132,18 @@ def tokenize(string: str) -> Generator[Token, None, None]:
         indent.pop()
         yield Token('DEDENT', '', start=(num_lines + 1, 0), end=(num_lines + 1, 0))
 
-def parse(seq: List[Token], gen_actor: Callable[[str], Actor]) -> Tuple[List[RootNode], List[Actor]]:
+def process_actor_annotations(seq: List[Token]) -> Tuple[Dict[str, str], List[Token]]:
+    i = 0
+    rv: Dict[str, str] = {}
+    while i < len(seq) and seq[i].type == 'ANNOTATION':
+        actor_name, sec_name = seq[i].value[1:].strip().split(':', 1)
+        rv[actor_name] = sec_name
+        i += 1
+    return rv, seq[i:]
+
+def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[List[RootNode], List[Actor]]:
     actors: Dict[str, Actor] = {}
+    actor_secondary_names, seq = process_actor_annotations(seq)
 
     tokval = lambda x: x.value
     toktype = lambda t: some(lambda x: x.type == t) >> tokval
@@ -156,7 +173,7 @@ def parse(seq: List[Token], gen_actor: Callable[[str], Actor]) -> Tuple[List[Roo
         actor_name, action_name, params = n
         action_name = f'EventFlowAction{action_name}'
         if actor_name not in actors:
-            actors[actor_name] = gen_actor(actor_name)
+            actors[actor_name] = gen_actor(actor_name, actor_secondary_names.get(actor_name, ''))
         assert action_name in actors[actor_name].actions, f'no action with name "{action_name}" found'
 
         action = actors[actor_name].actions[action_name]

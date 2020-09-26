@@ -77,6 +77,8 @@ class File(ContainerBlock):
                     pooled_strings.update(p.name for p in q.params)
             if add_actor:
                 pooled_strings.add(actor.name)
+                if actor.secondary_name:
+                    pooled_strings.add(actor.secondary_name)
         pool = StringPool(sorted(list(pooled_strings)))
 
         flowchart_dic = Dictionary([filename], pool)

@@ -235,8 +235,7 @@ class Flowchart(ContainerBlock):
 
             action_array = BlockPtrArray[String]([pool[s] for s in actions]) if actions else None
             query_array = BlockPtrArray[String]([pool[s] for s in queries]) if queries else None
-            # todo: secondary name
-            actors.append(_Actor(actor.name, '', action_array, query_array, pool))
+            actors.append(_Actor(actor.name, actor.secondary_name, action_array, query_array, pool))
             if action_array:
                 actor_fnames.append(action_array)
             if query_array:
