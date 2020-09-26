@@ -283,7 +283,7 @@ class Flowchart(ContainerBlock):
                     _VarDef(TypedValue(v.type_, v.initial_value))
                     for v in entrypoint.vardefs
                 ])
-            start = event_indices[entrypoint.out_edges[0]]
+            start = event_indices[entrypoint.out_edges[0]] if entrypoint.out_edges else 0xFFFF
             ep = _Entrypoint(vardef_names, epdata, si, start)
 
             entrypoint_names.append(entrypoint.name)
