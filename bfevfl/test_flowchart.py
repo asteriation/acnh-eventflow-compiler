@@ -10,7 +10,7 @@ from .str_ import String, StringPool
 from .dic_ import Dictionary
 from .array import BlockArray, BlockPtrArray, Uint16Array
 from .container import Container
-from .flowchart import (_Actor, _Event, _ActionEvent, _ForkEvent, _JoinEvent,
+from .flowchart import (_Actor, _Event, _ActionEvent, _ForkEvent, _JoinEvent, _SubflowEvent,
         _VarDef, _Pad24, _Entrypoint, _FlowchartHeader, Flowchart)
 
 class Test_Actor(unittest.TestCase):
@@ -107,6 +107,36 @@ class Test_JoinEvent(unittest.TestCase):
                 pack('uintle:64', self.sp['join'].offset) +
                 Bits(b'\3\0\x22\x33\0\0\0\0') +
                 Bits(b'\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0')
+        )
+
+class Test_SubflowEvent(unittest.TestCase):
+    def setUp(self):
+        self.sp = StringPool(['subflow', 'flowchart', 'entrypoint'])
+
+    def test_no_params(self):
+        subflow = _SubflowEvent('subflow', 0x1235, None, '', 'entrypoint', self.sp)
+
+        self.assertEqual(subflow.get_all_pointers(), [0, 24, 32])
+        self.assertEqual(subflow.prepare_bitstream(),
+                pack('uintle:64', self.sp['subflow'].offset) +
+                Bits(b'\4\0\x35\x12\0\0\0\0') +
+                pack('uintle:64', 0) +
+                pack('uintle:64', self.sp.empty.offset) +
+                pack('uintle:64', self.sp['entrypoint'].offset)
+        )
+
+    def test_params(self):
+        params = Container({}, self.sp)
+        params.offset = 12894712984
+        subflow = _SubflowEvent('subflow', 0x1235, params, 'flowchart', 'entrypoint', self.sp)
+
+        self.assertEqual(subflow.get_all_pointers(), [0, 16, 24, 32])
+        self.assertEqual(subflow.prepare_bitstream(),
+                pack('uintle:64', self.sp['subflow'].offset) +
+                Bits(b'\4\0\x35\x12\0\0\0\0') +
+                pack('uintle:64', params.offset) +
+                pack('uintle:64', self.sp['flowchart'].offset) +
+                pack('uintle:64', self.sp['entrypoint'].offset)
         )
 
 class Test_VarDef(unittest.TestCase):

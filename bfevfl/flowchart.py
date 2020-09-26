@@ -7,7 +7,7 @@ from bitstring import BitStream, pack
 
 from .datatype import TypedValue
 from .actors import Actor
-from .nodes import Node, RootNode, ActionNode, ForkNode, JoinNode
+from .nodes import Node, RootNode, ActionNode, ForkNode, JoinNode, SubflowNode
 from .block import DataBlock, ContainerBlock, Block
 from .str_ import StringPool, String
 from .dic_ import Dictionary
@@ -77,6 +77,18 @@ class _JoinEvent(_Event):
 
         with self._at_offset(0xa):
             self.buffer.overwrite(pack('uintle:16', next_index))
+
+class _SubflowEvent(_Event):
+    def __init__(self, name: str, next_index: int, params: Optional[Container],
+                 flowchart: str, entrypoint: str, pool: StringPool) -> None:
+        super().__init__(name, 4, pool)
+
+        with self._at_offset(0xa):
+            self.buffer.overwrite(pack('uintle:16', next_index))
+
+        self._add_pointer(0x10, params)
+        self._add_pointer(0x18, pool[flowchart])
+        self._add_pointer(0x20, pool[entrypoint])
 
 class _VarDefData(DataBlock):
     def alignment(self) -> int:
@@ -265,6 +277,14 @@ class Flowchart(ContainerBlock):
 
                 ev = _JoinEvent(event.name, nxt, pool)
                 evdata = None
+            elif isinstance(event, SubflowNode):
+                nxt = event_indices[event.out_edges[0]] if event.out_edges else 0xFFFF
+                flowchart_name = event.ns
+                entrypoint_name = event.called_root_name
+                params = Container(event.params, pool) if event.params else None
+
+                ev = _SubflowEvent(event.name, nxt, params, flowchart_name, entrypoint_name, pool)
+                evdata = params
             else:
                 raise TypeError(f'{type(event).__name__} not supported')
 
