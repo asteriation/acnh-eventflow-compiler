@@ -7,7 +7,7 @@ from bitstring import BitStream, pack
 
 from .datatype import TypedValue
 from .actors import Actor
-from .nodes import Node, RootNode, ActionNode
+from .nodes import Node, RootNode, ActionNode, ForkNode, JoinNode
 from .block import DataBlock, ContainerBlock, Block
 from .str_ import StringPool, String
 from .dic_ import Dictionary
@@ -34,7 +34,7 @@ class _Actor(DataBlock):
     def alignment(self) -> int:
         return 8
 
-_EventData = Union[Container]
+_EventData = Union[Container, Uint16Array]
 
 class _Event(DataBlock):
     def  __init__(self, name: str, event_type: int, pool: StringPool) -> None:
@@ -61,17 +61,22 @@ class _ActionEvent(_Event):
 
 # TODO query
 
-class _SubflowIndexArray(DataBlock):
-    def __init__(self, subflow_indices: List[int]) -> None:
-        super().__init__(len(subflow_indices) * 2)
+class _ForkEvent(_Event):
+    def __init__(self, name: str, forks: Uint16Array, join_index: int, pool: StringPool) -> None:
+        super().__init__(name, 2, pool)
 
-        self.n = len(subflow_indices)
-        with self._at_offset(0):
-            for i in subflow_indices:
-                self.buffer.overwrite(pack('uintle:16', i))
+        with self._at_offset(0xa):
+            self.buffer.overwrite(pack('uintle:16', forks.n))
+            self.buffer.overwrite(pack('uintle:16', join_index))
 
-    def alignment(self) -> int:
-        return 8
+        self._add_pointer(0x10, forks)
+
+class _JoinEvent(_Event):
+    def __init__(self, name: str, next_index: int, pool: StringPool) -> None:
+        super().__init__(name, 3, pool)
+
+        with self._at_offset(0xa):
+            self.buffer.overwrite(pack('uintle:16', next_index))
 
 class _VarDefData(DataBlock):
     def alignment(self) -> int:
@@ -250,6 +255,17 @@ class Flowchart(ContainerBlock):
 
                 ev = _ActionEvent(event.name, nxt, actor_index, action_index, params, pool)
                 evdata = params
+            elif isinstance(event, ForkNode):
+                forks = Uint16Array([event_indices[e] for e in event.out_edges if e != event.join_node])
+                join_index = event_indices[event.join_node]
+
+                ev = _ForkEvent(event.name, forks, join_index, pool)
+                evdata = forks
+            elif isinstance(event, JoinNode):
+                nxt = event_indices[event.out_edges[0]] if event.out_edges else 0xFFFF
+
+                ev = _JoinEvent(event.name, nxt, pool)
+                evdata = None
             else:
                 raise TypeError(f'{type(event).__name__} not supported')
 

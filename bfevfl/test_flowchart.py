@@ -10,7 +10,7 @@ from .str_ import String, StringPool
 from .dic_ import Dictionary
 from .array import BlockArray, BlockPtrArray, Uint16Array
 from .container import Container
-from .flowchart import (_Actor, _Event, _ActionEvent,
+from .flowchart import (_Actor, _Event, _ActionEvent, _ForkEvent, _JoinEvent,
         _VarDef, _Pad24, _Entrypoint, _FlowchartHeader, Flowchart)
 
 class Test_Actor(unittest.TestCase):
@@ -78,6 +78,37 @@ class Test_ActionEvent(unittest.TestCase):
                 Bits(b'\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0')
         )
 
+class Test_ForkEvent(unittest.TestCase):
+    def setUp(self):
+        self.sp = StringPool(['fork'])
+
+    def test(self):
+        forks = Uint16Array([0x4, 0x7, 0x1111])
+        fork = _ForkEvent('fork', forks, 0x3322, self.sp)
+        forks.set_offset(0x190812444)
+
+        self.assertEqual(fork.get_all_pointers(), [0, 16])
+        self.assertEqual(fork.prepare_bitstream(),
+                pack('uintle:64', self.sp['fork'].offset) +
+                Bits(b'\2\0\3\0\x22\x33\0\0') +
+                pack('uintle:64', forks.offset) +
+                Bits(b'\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0')
+        )
+
+class Test_JoinEvent(unittest.TestCase):
+    def setUp(self):
+        self.sp = StringPool(['join'])
+
+    def test(self):
+        join = _JoinEvent('join', 0x3322, self.sp)
+
+        self.assertEqual(join.get_all_pointers(), [0])
+        self.assertEqual(join.prepare_bitstream(),
+                pack('uintle:64', self.sp['join'].offset) +
+                Bits(b'\3\0\x22\x33\0\0\0\0') +
+                Bits(b'\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0')
+        )
+
 class Test_VarDef(unittest.TestCase):
     def test_int(self):
         v = _VarDef(TypedValue(IntType, 4))
@@ -105,7 +136,7 @@ class Test_Entrypoint(unittest.TestCase):
         )
 
     def test_subflow_index(self):
-        si = _Uint16Array(list(range(10)))
+        si = Uint16Array(list(range(10)))
         si.offset = 1289471295
         ep = _Entrypoint(None, _Pad24(), si, 0x2345)
 
