@@ -147,7 +147,8 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
 
     tokval = lambda x: x.value
     toktype = lambda t: some(lambda x: x.type == t) >> tokval
-    tok = lambda typ, name: skip(a(Token(typ, name)) >> tokval)
+    tokop = lambda typ: skip(some(lambda x: x.type == typ))
+    tokkw = lambda name: skip(a(Token('KW', name)))
 
     def make_array(n):
         if n is None:
@@ -198,6 +199,14 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
 
         return fork, join
 
+    def make_subflow_param(n):
+        # todo
+        return n
+
+    def make_subflow(n):
+        # todo
+        return n
+
     def make_none(_):
         return None
 
@@ -234,7 +243,7 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
 
     block = forward_decl()
 
-    # value: INT | STRING | FLOAT | BOOL | ID (todo)
+    # value = INT | STRING | FLOAT | BOOL | ID (todo)
     value = (
         toktype('INT') >> int_
         | toktype('FLOAT') >> float_
@@ -242,66 +251,73 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
         | toktype('STRING') >> string
     )
 
-    # function_params: | function_params COMMA value
-    function_params = maybe(value + many(tok('COMMA', ',') + value)) >> make_array
+    # function_params =  [value { COMMA value }]
+    function_params = maybe(value + many(tokop('COMMA') + value)) >> make_array
 
-    # actor_name: id
+    # actor_name = id
     actor_name = id_
-    # action_name: id
+    # action_name = id
     action_name = id_
-    # simple_action: actor_name DOT action_name LPAREN function_params RPAREN NL
+    # simple_action = actor_name DOT action_name LPAREN function_params RPAREN NL
     simple_action = (
-        actor_name + tok('DOT', '.') + action_name +
-        tok('LPAREN', '(') + function_params + tok('RPAREN', ')') +
-        tok('NL', '')
+        actor_name + tokop('DOT') + action_name +
+        tokop('LPAREN') + function_params + tokop('RPAREN') +
+        tokop('NL')
     ) >> make_action
 
-    # action: simple_action (todo: converted actions)
+    # action = simple_action (todo: converted actions)
     action = simple_action
 
-    # branch: BRANCH block NL
-    branch = tok('KW', 'branch') + block
-
-    # branches: branch | branches branch
+    # branches = { BRANCH block }
     # branchless case handled implicitly by lack of INDENT
-    branches = many(branch)
+    branches = many(tokkw('branch') + block)
 
-    # fork: FORK COLON NL INDENT branches DEDENT
-    fork = tok('KW', 'fork') + tok('COLON', ':') + tok('NL', '') + \
-            tok('INDENT', '') + branches + tok('DEDENT', '') >> make_fork
+    # fork = FORK COLON NL INDENT branches DEDENT
+    fork = tokkw('fork') + tokop('COLON') + tokop('NL') + \
+            tokop('INDENT') + branches + tokop('DEDENT') >> make_fork
 
-    # pass: PASS NL
-    pass_ = (tok('KW', 'pass') + tok('NL', '')) >> make_none
+    # pass = PASS NL
+    pass_ = (tokkw('pass') + tokop('NL')) >> make_none
 
-    # return: RETURN NL
-    return_ = (tok('KW', 'return') + tok('NL', '')) >> make_return
+    # return = RETURN NL
+    return_ = (tokkw('return') + tokop('NL')) >> make_return
 
-    # stmt: action | fork | pass_ | return | NL (todo: queries, blocks)
-    stmt = action | fork | pass_ | return_ | tok('NL', '')
+    # flow_name = id | id COLON COLON id
+    flow_name = id_ | id_ + tokop('COLON') + tokop('COLON') + id_
 
-    # block_body: stmt | block_body stmt
+    # subflow_param = id ASSIGN value
+    subflow_param = id_ + tokop('ASSIGN') + value >> make_subflow_param
+
+    # subflow_params = [subflow_param { COMMA subflow_param }]
+    subflow_params = maybe(subflow_param + many(tokop('COMMA') + subflow_param)) >> make_array
+
+    # run = RUN flow_name LPAREN subflow_params RPAREN NL
+    run = (
+        tokkw('run') + flow_name + tokop('LPAREN') + subflow_params + tokop('RPAREN') + tokop('NL')
+    ) >> make_subflow
+
+    # stmt = action | fork | run | pass_ | return | NL (todo: queries, blocks)
+    stmt = action | fork | run | pass_ | return_ | tokop('NL')
+
+    # block_body = stmt { stmt }
     block_body = stmt + many(stmt) >> link_block
 
-    # block: COLON NL INDENT block_body DEDENT
-    block.define(
-        tok('COLON', ':') + tok('NL', '') + tok('INDENT', '') +
-        block_body + tok('DEDENT', '')
-    )
+    # block = COLON NL INDENT block_body DEDENT
+    block.define(tokop('COLON') + tokop('NL') + tokop('INDENT') + block_body + tokop('DEDENT'))
 
-    # flow_param: ID COLON TYPE
-    flow_param = id_ + tok('COLON', ':') + (toktype('TYPE') >> type_)
+    # flow_param = ID COLON TYPE
+    flow_param = id_ + tokop('COLON') + (toktype('TYPE') >> type_)
 
-    # flow_params:  | flow_params COMMA flow_param
-    flow_params = maybe(flow_param + many(tok('COMMA', ',') + flow_param)) >> make_array
+    # flow_params = [flow_param { COMMA flow_param }]
+    flow_params = maybe(flow_param + many(tokop('COMMA') + flow_param)) >> make_array
 
-    # flow: FLOW ID LPAREN flow_params RPAREN block
+    # flow = FLOW ID LPAREN flow_params RPAREN block
     flow = (
-        tok('KW', 'flow') + id_ + tok('LPAREN', '(') +
-        flow_params + tok('RPAREN', ')') + block
+        tokkw('flow') + id_ + tokop('LPAREN') + flow_params + tokop('RPAREN') + block
     ) >> make_flow
 
-    # file: | file flow | file NL
-    evfl_file = many(flow | (tok('NL', '') >> make_none)) >> collect_flows
+    # file = { flow | NL }
+    evfl_file = many(flow | (tokop('NL') >> make_none)) >> collect_flows
 
     parser = evfl_file + skip(finished)
     roots: List[RootNode] = parser.parse(seq)
