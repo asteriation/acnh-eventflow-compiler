@@ -11,7 +11,7 @@ from .nodes import Node, RootNode, ActionNode
 from .block import DataBlock, ContainerBlock, Block
 from .str_ import StringPool, String
 from .dic_ import Dictionary
-from .array import BlockPtrArray, BlockArray
+from .array import BlockPtrArray, BlockArray, Uint16Array
 from .container import Container
 
 class _Actor(DataBlock):
@@ -154,7 +154,7 @@ _EntrypointData = Union[BlockArray[_VarDef], _Pad24]
 
 class _Entrypoint(DataBlock):
     def __init__(self, vardef_names: Optional[Dictionary], vardefs: _EntrypointData,
-                 subflow_indices: Optional[_SubflowIndexArray], main_index: int) -> None:
+                 subflow_indices: Optional[Uint16Array], main_index: int) -> None:
         super().__init__(0x1e)
 
         self._add_pointer(0, subflow_indices)
@@ -258,7 +258,7 @@ class Flowchart(ContainerBlock):
                 event_data.append(evdata)
 
         for entrypoint in entrypoints_:
-            si = _SubflowIndexArray(entrypoint_calls[entrypoint.name]) or None
+            si = Uint16Array(entrypoint_calls[entrypoint.name]) or None
 
             vardef_names: Optional[Dictionary] = None
             epdata: _EntrypointData = _Pad24()

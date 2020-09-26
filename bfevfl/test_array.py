@@ -5,7 +5,7 @@ import unittest
 from bitstring import Bits, pack
 
 from .block import Block, DataBlock
-from .array import BlockPtrArray, BlockArray, IntArray, BoolArray, FloatArray, StringArray
+from .array import BlockPtrArray, BlockArray, Uint16Array, IntArray, BoolArray, FloatArray, StringArray
 
 Block.__abstractmethods__ = frozenset() # type: ignore
 DataBlock.__abstractmethods__ = frozenset() # type: ignore
@@ -39,6 +39,16 @@ class TestArray(unittest.TestCase):
 
         self.assertEqual(len(arr), 8 + 3 + 6)
         self.assertEqual(arr.prepare_bitstream(), Bits(b'abcdefgh!@#123456'))
+
+    def test_uint16_empty(self):
+        arr = Uint16Array([])
+        self.assertEqual(arr.prepare_bitstream(), Bits(''))
+
+    def test_uint16(self):
+        arr = Uint16Array([0x1234, 0x5678])
+        self.assertEqual(arr.prepare_bitstream(),
+                Bits(b'\x34\x12\x78\x56')
+        )
 
     def test_int_empty(self):
         arr = IntArray([])

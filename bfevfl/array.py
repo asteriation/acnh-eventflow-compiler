@@ -39,6 +39,17 @@ class IntArray(DataBlock):
     def alignment(self) -> int:
         return 4
 
+class Uint16Array(DataBlock):
+    def __init__(self, items: Sequence[int]) -> None:
+        super().__init__(2 * len(items))
+
+        self.n = len(items)
+        for i, item in enumerate(items):
+            self.buffer.overwrite(pack('uintle:16', item))
+
+    def alignment(self) -> int:
+        return 8
+
 class BoolArray(DataBlock):
     # todo: verify true
     def __init__(self, items: Sequence[bool]) -> None:

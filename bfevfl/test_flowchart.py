@@ -8,10 +8,10 @@ from .datatype import TypedValue, IntType, FloatType, BoolType
 from .actors import Actor, Action, Query
 from .str_ import String, StringPool
 from .dic_ import Dictionary
-from .array import BlockArray, BlockPtrArray
+from .array import BlockArray, BlockPtrArray, Uint16Array
 from .container import Container
 from .flowchart import (_Actor, _Event, _ActionEvent,
-        _SubflowIndexArray, _VarDef, _Pad24, _Entrypoint, _FlowchartHeader, Flowchart)
+        _VarDef, _Pad24, _Entrypoint, _FlowchartHeader, Flowchart)
 
 class Test_Actor(unittest.TestCase):
     def setUp(self):
@@ -78,15 +78,6 @@ class Test_ActionEvent(unittest.TestCase):
                 Bits(b'\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0')
         )
 
-class Test_SubflowIndexArray(unittest.TestCase):
-    def test_empty(self):
-        arr = _SubflowIndexArray([])
-        self.assertEqual(arr.prepare_bitstream(), Bits(b''))
-
-    def test_nonempty(self):
-        arr = _SubflowIndexArray([0, 5, 4, 0x3321, 7])
-        self.assertEqual(arr.prepare_bitstream(), Bits(b'\0\0\5\0\4\0\x21\x33\7\0'))
-
 class Test_VarDef(unittest.TestCase):
     def test_int(self):
         v = _VarDef(TypedValue(IntType, 4))
@@ -114,7 +105,7 @@ class Test_Entrypoint(unittest.TestCase):
         )
 
     def test_subflow_index(self):
-        si = _SubflowIndexArray(list(range(10)))
+        si = _Uint16Array(list(range(10)))
         si.offset = 1289471295
         ep = _Entrypoint(None, _Pad24(), si, 0x2345)
 
