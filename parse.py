@@ -276,8 +276,8 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
     # return: RETURN NL
     return_ = (tok('KW', 'return') + tok('NL', '')) >> make_return
 
-    # stmt: action | fork | pass_ | return (todo: queries, blocks)
-    stmt = action | fork | pass_ | return_
+    # stmt: action | fork | pass_ | return | NL (todo: queries, blocks)
+    stmt = action | fork | pass_ | return_ | tok('NL', '')
 
     # block_body: stmt | block_body stmt
     block_body = stmt + many(stmt) >> link_block

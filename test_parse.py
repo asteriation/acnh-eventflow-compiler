@@ -172,6 +172,7 @@ class TestParser(unittest.TestCase):
         ('simple_fork', None),
         ('fork_join_action', None),
         ('annotation', None),
+        ('leading_comments', None),
         ('err_out_of_flow', NoParseError),
         ('err_fork_no_branch', NoParseError),
         ('err_fork_pass', NoParseError),
