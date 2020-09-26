@@ -9,7 +9,7 @@ from funcparserlib.parser import a, some, maybe, many, finished, skip, forward_d
 
 from bfevfl.datatype import BoolType, FloatType, IntType, StrType, Type, TypedValue
 from bfevfl.actors import Param, Action, Actor
-from bfevfl.nodes import Node, RootNode, ActionNode, JoinNode, ForkNode, TerminalNode
+from bfevfl.nodes import Node, RootNode, ActionNode, JoinNode, ForkNode, SubflowNode, TerminalNode
 
 def compare_indent(base: str, new: str, pos: Tuple[int, int]) -> int:
     if base.startswith(new):
@@ -35,7 +35,7 @@ def tokenize(string: str) -> Generator[Token, None, None]:
         ('DOT', (r'\.',)),
         ('COMMA', (r',',)),
         ('TYPE', (r'int|float|str',)),
-        ('KW', (r'flow|internal|entrypoint|if|elif|else|do|while|fork|branch|return|pass|not|and|or|in',)),
+        ('KW', (r'flow|internal|entrypoint|if|elif|else|do|while|fork|branch|return|pass|not|and|or|in|run',)),
         ('BOOL', (r'true|false',)),
         ('ID', (r'''
             [A-Za-z]
@@ -200,12 +200,12 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
         return fork, join
 
     def make_subflow_param(n):
-        # todo
-        return n
+        return (n,)
 
     def make_subflow(n):
-        # todo
-        return n
+        ns, name, params = n
+        param_dict = {k[0][0]: k[0][1] for k in params}
+        return SubflowNode(f'Event{next_id()}', ns or '', name, param_dict)
 
     def make_none(_):
         return None
@@ -282,8 +282,8 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
     # return = RETURN NL
     return_ = (tokkw('return') + tokop('NL')) >> make_return
 
-    # flow_name = id | id COLON COLON id
-    flow_name = id_ | id_ + tokop('COLON') + tokop('COLON') + id_
+    # flow_name = [id COLON COLON] id
+    flow_name = maybe(id_ + tokop('COLON') + tokop('COLON')) + id_
 
     # subflow_param = id ASSIGN value
     subflow_param = id_ + tokop('ASSIGN') + value >> make_subflow_param

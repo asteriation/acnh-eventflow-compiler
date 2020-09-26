@@ -77,8 +77,7 @@ class TestTokenize(unittest.TestCase):
             list(tokenize('('))
 
     def test_paren_unclosed2(self):
-        with self.assertRaises(LexerError):
-            list(tokenize('['))
+        with self.assertRaises(LexerError): list(tokenize('['))
 
     def test_nonstart_annotation(self):
         with self.assertRaises(LexerError):
@@ -173,6 +172,7 @@ class TestParser(unittest.TestCase):
         ('fork_join_action', None),
         ('annotation', None),
         ('leading_comments', None),
+        ('subflow', None),
         ('err_out_of_flow', NoParseError),
         ('err_fork_no_branch', NoParseError),
         ('err_fork_pass', NoParseError),

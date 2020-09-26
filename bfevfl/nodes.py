@@ -134,7 +134,7 @@ class JoinNode(Node):
             ']'
 
 class SubflowNode(Node):
-    def __init__(self, name: str, ns: str, called_root_name: str, params: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(self, name: str, ns: str, called_root_name: str, params: Optional[Dict[str, TypedValue]] = None) -> None:
         Node.__init__(self, name)
         self.ns = ns
         self.called_root_name = called_root_name

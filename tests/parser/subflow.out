@@ -1,0 +1,8 @@
+RootNode[name=Root, vardefs=[], out_edges=[Event0]]
+SubflowNode[name=Event0, ns=, called_root_name=local_0p, params={}, out_edges=[Event1]]
+SubflowNode[name=Event1, ns=, called_root_name=local_1p, params={'Param': TypedValue(type=Type(type='int'), value=4)}, out_edges=[Event2]]
+SubflowNode[name=Event2, ns=, called_root_name=local_2p, params={'Param': TypedValue(type=Type(type='float'), value=4.3), 'X': TypedValue(type=Type(type='str'), value='123')}, out_edges=[Event3]]
+SubflowNode[name=Event3, ns=non, called_root_name=local_0p, params={}, out_edges=[Event4]]
+SubflowNode[name=Event4, ns=non, called_root_name=local_1p, params={'Param': TypedValue(type=Type(type='int'), value=4)}, out_edges=[Event5]]
+SubflowNode[name=Event5, ns=non, called_root_name=local_2p, params={'Param': TypedValue(type=Type(type='float'), value=4.3), 'X': TypedValue(type=Type(type='str'), value='123')}, out_edges=[]]
+

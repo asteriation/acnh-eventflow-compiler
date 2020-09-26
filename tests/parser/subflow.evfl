@@ -1,0 +1,8 @@
+flow Root():
+    run local_0p()
+    run local_1p(Param=4)
+    run local_2p(Param=4.3, X='123')
+    run non::local_0p()
+    run non::local_1p(Param=4)
+    run non::local_2p(Param=4.3, X='123')
+    return
