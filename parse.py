@@ -60,7 +60,7 @@ def tokenize(string: str) -> List[Token]:
         string = string + '\n'
 
     num_lines = len(re.findall(r'\r\n|\r|\n', string))
-    tokens = []
+    tokens: List[Token] = []
     space_since_nl = False
     first_non_annotation = False
     for x in t(string):
@@ -91,10 +91,10 @@ def tokenize(string: str) -> List[Token]:
         elif x.type == 'NL':
             if pstack:
                 continue
+            space_since_nl = False
             if tokens and tokens[-1].type == 'NL':
                 continue
             x = Token('NL', '', start=x.start, end=x.end)
-            space_since_nl = False
         elif x.type == 'SP':
             space_since_nl = True
             if tokens and tokens[-1].type == 'NL':
@@ -109,14 +109,10 @@ def tokenize(string: str) -> List[Token]:
                         tokens.append(Token('DEDENT', '', start=x.start, end=x.end))
                     if not indent:
                         raise LexerError(x.end, 'dedent to unknown level')
-                    continue
                 elif indent_diff > 0:
                     indent.append(x.name)
-                    x = Token('INDENT', '', start=x.start, end=x.end)
-                else:
-                    continue
-            else:
-                continue
+                    tokens.append(Token('INDENT', '', start=x.start, end=x.end))
+            continue
 
         if x.type != 'INDENT' and tokens and tokens[-1].type == 'NL' and not space_since_nl:
             while len(indent) > 1:

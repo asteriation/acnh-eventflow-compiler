@@ -40,11 +40,19 @@ class TestTokenize(unittest.TestCase):
         ]
         self.assertEqual(token_types, expected)
 
-    def test_comment_indent(self):
+    def test_comment_indent_1(self):
         tokens = tokenize('\n  # \na # b\n # c')
         token_types = [t.type for t in tokens]
         expected = [
                 'NL', 'ID', 'NL'
+        ]
+        self.assertEqual(token_types, expected)
+
+    def test_comment_indent_2(self):
+        tokens = tokenize('\n  a\n  #b\nc')
+        token_types = [t.type for t in tokens]
+        expected = [
+                'NL', 'INDENT', 'ID', 'NL', 'DEDENT', 'ID', 'NL'
         ]
         self.assertEqual(token_types, expected)
 
