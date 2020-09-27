@@ -6,8 +6,8 @@ from typing import Dict, List, Set
 from funcparserlib.lexer import Token, LexerError
 from funcparserlib.parser import NoParseError
 
-from bfevfl.datatype import BoolType, FloatType, IntType, StrType
-from bfevfl.actors import Action, Actor, Param
+from bfevfl.datatype import BoolType, FloatType, IntType, StrType, Type
+from bfevfl.actors import Action, Actor, Query, Param
 from bfevfl.nodes import RootNode, TerminalNode, TerminalNode_, Node
 
 from parse import tokenize, parse
@@ -214,6 +214,21 @@ class TestParser(unittest.TestCase):
             Param('param2', FloatType),
             Param('param3', BoolType),
         ]))
+        actor.register_query(Query(name, 'EventFlowActionQuery0', [], Type('int3'), False))
+        actor.register_query(Query(name, 'EventFlowActionQuery1', [
+            Param('param0', IntType),
+        ], Type('bool'), False))
+        actor.register_query(Query(name, 'EventFlowActionQuery2', [
+            Param('param0', IntType),
+        ], Type('bool'), True))
+
+        # switch (full)
+        # switch (nonfull)
+        # error: switch (empty)
+        # switch non-return join (full)
+        # switch non-return join (nonfull)
+        # nested switch (joined end)
+        # nested switch (action end)
 
         return actor
 

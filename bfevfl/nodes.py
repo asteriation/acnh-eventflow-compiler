@@ -19,6 +19,10 @@ class Node(ABC):
     def del_out_edge(self, dest: Node) -> None:
         self.out_edges.remove(dest)
 
+    def reroute_out_edge(self, old_dest: Node, new_dest: Node) -> None:
+        while old_dest in self.out_edges:
+            self.out_edges[self.out_edges.index(old_dest)] = new_dest
+
     def __str__(self) -> str:
         return f'Node[name={self.name}' + \
             f', out_edges=[{", ".join(n.name for n in self.out_edges)}]' + \
@@ -67,6 +71,7 @@ class SwitchNode(Node):
         self.query = query
         self.params = params
         self.cases: Dict[Node, List[int]] = {}
+        self.connector = ConnectorNode(f'{name}Connector')
 
         assert sum(len(x) for x in self.cases.values()) <= self.query.rv.num_values()
 
@@ -74,6 +79,13 @@ class SwitchNode(Node):
         Node.del_out_edge(self, dest)
         if dest in self.cases:
             del self.cases[dest]
+
+    def reroute_out_edge(self, old_dest: Node, new_dest: Node) -> None:
+        Node.reroute_out_edge(self, old_dest, new_dest)
+        if old_dest in self.cases:
+            c = self.cases[old_dest]
+            del self.cases[old_dest]
+            self.cases[new_dest] = c
 
     def add_case(self, node: Node, value: int) -> None:
         if node not in self.cases:
@@ -123,6 +135,12 @@ class SubflowNode(Node):
             f', params={self.params}' + \
             f', out_edges=[{", ".join(n.name for n in self.out_edges)}]' + \
             ']'
+
+class ConnectorNode(Node):
+    def __str__(self) -> str:
+        return f'ConnectorNode[name={self.name}' + \
+            f', out_edges = [{", ".join(n.name for n in self.out_edges)}]' + \
+        ']'
 
 class TerminalNode_(Node):
     def __init__(self) -> None:

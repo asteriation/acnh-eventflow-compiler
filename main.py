@@ -24,6 +24,7 @@ def actor_gen(name: str, secondary_name: str) -> Actor:
     actor.register_action(Action(name, 'EventFlowActionUISonkatsuPointDisappear', []))
     actor.register_action(Action(name, 'EventFlowActionBellCountDown', [Param('Money', IntType), Param('Reverse', BoolType)]))
     actor.register_action(Action(name, 'EventFlowActionLifeSupportPointCountDown', [Param('Point', IntType), Param('Reverse', BoolType)]))
+    actor.register_query(Query(name, 'EventFlowQueryHasBellCount', [Param('Money', IntType)], BoolType, True))
     return actor
 
 if __name__ == '__main__':

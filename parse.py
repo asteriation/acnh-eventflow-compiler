@@ -7,9 +7,13 @@ from typing import Any, Callable, Dict, Generator, List, Optional, Sequence, Set
 from funcparserlib.lexer import make_tokenizer, Token, LexerError
 from funcparserlib.parser import a, some, maybe, many, finished, skip, forward_decl
 
+from logger import LOG
+from util import find_postorder
+
 from bfevfl.datatype import BoolType, FloatType, IntType, StrType, Type, TypedValue
 from bfevfl.actors import Param, Action, Actor
-from bfevfl.nodes import Node, RootNode, ActionNode, JoinNode, ForkNode, SubflowNode, TerminalNode
+from bfevfl.nodes import (Node, RootNode, ActionNode, SwitchNode, JoinNode, ForkNode,
+        SubflowNode, TerminalNode, ConnectorNode)
 
 def compare_indent(base: str, new: str, pos: Tuple[int, int]) -> int:
     if base.startswith(new):
@@ -35,7 +39,7 @@ def tokenize(string: str) -> List[Token]:
         ('DOT', (r'\.',)),
         ('COMMA', (r',',)),
         ('TYPE', (r'int|float|str',)),
-        ('KW', (r'flow|internal|entrypoint|if|elif|else|do|while|fork|branch|return|pass|not|and|or|in|run',)),
+        ('KW', (r'flow|internal|entrypoint|if|elif|else|do|while|fork|branch|return|pass|not|and|or|in|run|switch|case|default',)),
         ('BOOL', (r'true|false',)),
         ('ID', (r'''
             [A-Za-z]
@@ -183,10 +187,62 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
 
         return ActionNode(f'Event{next_id()}', action, pdict)
 
-    def make_fork(n):
-        for node in n:
+    def make_case(n):
+        if isinstance(n, tuple):
+            return ([x.value for x in n[0]], n[1])
+        return n
+
+    def make_switch(n):
+        actor_name, query_name, params, branches = n
+        cases = branches[0] + branches[2]
+        default = branches[1]
+
+        query_name = f'EventFlowQuery{query_name}'
+        if actor_name not in actors:
+            actors[actor_name] = gen_actor(actor_name, actor_secondary_names.get(actor_name, ''))
+        assert query_name in actors[actor_name].queries, f'no query with name "{query_name}" found'
+
+        query = actors[actor_name].queries[query_name]
+        try:
+            pdict = query.prepare_param_dict(params)
+        except AssertionError as e:
+            raise e # todo: better error messages
+
+        sw = SwitchNode(f'Event{next_id()}', query, pdict)
+        for values, block in cases:
+            node, connector = block
+
+            sw.add_out_edge(node)
+            connector.add_out_edge(sw.connector)
+
+            for value in values:
+                sw.add_case(node, value)
+
+        num_values = query.rv.num_values()
+        if num_values == 999999999:
+            LOG.warning(f'maximum value for {query_name} unknown; assuming 50')
+            LOG.warning(f'setting a maximum value in functions.csv may reduce generated bfevfl size')
+            num_values = 50
+
+        default_values = set(range(num_values)) - set(sum((v for v, n in cases), []))
+        if default_values:
+            if default is not None:
+                default.add_out_edge(sw.connector)
+
+            default_branch = default or sw.connector
+            sw.add_out_edge(default_branch)
+            for value in default_values:
+                sw.add_case(default_branch, value)
+        elif default:
+            LOG.warning(f'default branch for {query_name} call is dead code, ignoring')
+
+        return sw
+
+    def make_fork(n_):
+        for node, connector in n_:
             assert node is not None, 'empty branch in fork not allowed'
-            __replace_terminal(node, None)
+            __replace_node(node, connector, None)
+        n = [x for x, _ in n_]
 
         fork_id, join_id = next_id(), next_id()
         join = JoinNode(f'Event{join_id}')
@@ -212,26 +268,32 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
         return TerminalNode
 
     def make_flow(n):
-        name, params, body_root = n
+        name, params, body = n
+        body_root, body_connector = body
         assert not params, 'vardefs todo'
         node = RootNode(name, [])
         node.add_out_edge(body_root)
+        body_connector.add_out_edge(TerminalNode)
         return node
 
     def link_block(n):
+        connector = ConnectorNode(f'Connector{next_id()}')
+
         if n is None:
-            return TerminalNode
+            return (connector, connector)
 
         n = __flatten_nodes(n)
         n = [x for x in n if x is not None]
 
         if not n:
-            return TerminalNode
+            return (connector, connector)
 
-        for n1, n2 in zip(n[:-1], n[1:]):
-            n1.add_out_edge(n2)
-        n[-1].add_out_edge(TerminalNode)
-        return n[0]
+        for n1, n2 in zip(n, n[1:] + [connector]):
+            if isinstance(n1, SwitchNode):
+                n1.connector.add_out_edge(n2)
+            else:
+                n1.add_out_edge(n2)
+        return (n[0], connector)
 
     def collect_flows(n):
         if n is None:
@@ -249,22 +311,47 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
         | toktype('STRING') >> string
     )
 
+    # pass = PASS NL
+    pass_ = (tokkw('pass') + tokop('NL')) >> make_none
+
+    # return = RETURN NL
+    return_ = (tokkw('return') + tokop('NL')) >> make_return
+
     # function_params =  [value { COMMA value }]
     function_params = maybe(value + many(tokop('COMMA') + value)) >> make_array
 
     # actor_name = id
     actor_name = id_
-    # action_name = id
-    action_name = id_
-    # simple_action = actor_name DOT action_name LPAREN function_params RPAREN NL
-    simple_action = (
-        actor_name + tokop('DOT') + action_name +
-        tokop('LPAREN') + function_params + tokop('RPAREN') +
-        tokop('NL')
-    ) >> make_action
+    # function_name = id
+    function_name = id_
+    # function = actor_name DOT action_name LPAREN function_params RPAREN
+    function = (
+        actor_name + tokop('DOT') + function_name +
+        tokop('LPAREN') + function_params + tokop('RPAREN')
+    )
+    # simple_action = function NL
+    simple_action = function + tokop('NL') >> make_action
 
     # action = simple_action (todo: converted actions)
     action = simple_action
+
+    # int_list = INT {COMMA INT} | LPAREN int_list RPAREN
+    int_list = forward_decl()
+    int_list.define(((toktype('INT') >> int_) + many(tokop('COMMA') + (toktype('INT') >> int_)) | \
+            toktype('LPAREN') + int_list + toktype('RPAREN')) >> make_array)
+
+    # case = CASE int_list block
+    case = tokkw('case') + int_list + block >> make_case
+
+    # default = DEFAULT block
+    default = tokkw('default') + block >> make_case
+
+    # cases = { case } [ default ] { case } | pass
+    cases = many(case) + maybe(default) + many(case) | pass_
+
+    # switch = SWITCH function COLON NL INDENT cases DEDENT
+    switch = tokkw('switch') + function + tokop('COLON') + tokop('NL') + \
+            tokop('INDENT') + cases + tokop('DEDENT') >> make_switch
 
     # branches = { BRANCH block }
     # branchless case handled implicitly by lack of INDENT
@@ -273,12 +360,6 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
     # fork = FORK COLON NL INDENT branches DEDENT
     fork = tokkw('fork') + tokop('COLON') + tokop('NL') + \
             tokop('INDENT') + branches + tokop('DEDENT') >> make_fork
-
-    # pass = PASS NL
-    pass_ = (tokkw('pass') + tokop('NL')) >> make_none
-
-    # return = RETURN NL
-    return_ = (tokkw('return') + tokop('NL')) >> make_return
 
     # flow_name = [id COLON COLON] id
     flow_name = maybe(id_ + tokop('COLON') + tokop('COLON')) + id_
@@ -294,8 +375,8 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
         tokkw('run') + flow_name + tokop('LPAREN') + subflow_params + tokop('RPAREN') + tokop('NL')
     ) >> make_subflow
 
-    # stmt = action | fork | run | pass_ | return | NL (todo: queries, blocks)
-    stmt = action | fork | run | pass_ | return_ | tokop('NL')
+    # stmt = action | switch | fork | run | pass_ | return | NL (todo: queries, blocks)
+    stmt = action | switch | fork | run | pass_ | return_ | (tokop('NL') >> make_none)
 
     # block_body = stmt { stmt }
     block_body = stmt + many(stmt) >> link_block
@@ -320,23 +401,29 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
     parser = evfl_file + skip(finished)
     roots: List[RootNode] = parser.parse(seq)
     for n in roots:
-        __replace_terminal(n, None)
+        __collapse_connectors(n)
+        __replace_node(n, TerminalNode, None)
 
     return roots, list(actors.values())
 
-def __replace_terminal_helper(root: Node, replacement: Optional[Node], visited: Set[str]) -> None:
-    if TerminalNode in root.out_edges:
-        root.del_out_edge(TerminalNode)
-        if replacement is not None:
-            root.add_out_edge(replacement)
+def __collapse_connectors(root: RootNode) -> None:
+    remap: Dict[Node, Node] = {}
 
-    for node in root.out_edges:
-        if node.name not in visited:
-            visited.add(node.name)
-            __replace_terminal_helper(node, replacement, visited)
+    for node in find_postorder(root):
+        for onode in node.out_edges:
+            if onode in remap:
+                node.reroute_out_edge(onode, remap[onode])
+        if isinstance(node, ConnectorNode):
+            assert len(node.out_edges) == 1
+            remap[node] = node.out_edges[0]
 
-def __replace_terminal(root: Node, replacement: Optional[Node]) -> None:
-    __replace_terminal_helper(root, replacement, set())
+def __replace_node(root: Node, replace: Node, replacement: Optional[Node]) -> None:
+    for node in find_postorder(root):
+        if replace in node.out_edges:
+            if replacement is None:
+                node.del_out_edge(replace)
+            else:
+                node.reroute_out_edge(replace, replacement)
 
 def __flatten_nodes_helper(lst: Iterable[Any]) -> Generator[Node, None, None]:
     for x in lst:
