@@ -7,7 +7,7 @@ from typing import Set
 
 from bfevfl.datatype import IntType, StrType, BoolType
 from bfevfl.actors import Actor, Action, Query, Param
-from bfevfl.nodes import Node, ActionNode
+from bfevfl.nodes import Node, ActionNode, SwitchNode, SubflowNode
 from bfevfl.file import File
 
 from parse import tokenize, parse
@@ -73,10 +73,20 @@ if __name__ == '__main__':
         roots, actors = parse(tokens, actor_gen)
 
         nodes: Set[Node] = set()
+        entrypoints = set(r.name for r in roots)
         for root in roots:
             for node in find_postorder(root):
+                if node in nodes:
+                    continue
                 if isinstance(node, ActionNode):
                     node.action.mark_used()
+                elif isinstance(node, SwitchNode):
+                    node.query.mark_used()
+                elif isinstance(node, SubflowNode):
+                    if node.ns == '' and node.called_root_name not in entrypoints:
+                        print(f'subflow call for {node.called_root_name} but matching flow/entrypoint not found')
+                        sys.exit(2)
+
                 nodes.add(node)
 
         # print(nodes)
