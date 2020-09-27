@@ -89,12 +89,7 @@ if __name__ == '__main__':
 
                 nodes.add(node)
 
-        # print(nodes)
-
         bfevfl = File(name, actors, list(nodes))
         with of.open('wb') as f:
             f.write(bfevfl.prepare_bitstream().bytes)
-
-        print(if_, name, 'outfile:', of)
-        print(nodes)
 
