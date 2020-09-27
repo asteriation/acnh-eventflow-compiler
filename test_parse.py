@@ -15,12 +15,12 @@ from util import find_postorder
 
 class TestTokenize(unittest.TestCase):
     def test_indent_dedent_simple(self):
-        tokens = list(tokenize('\n \n'))
+        tokens = tokenize('\n \n')
         token_types = [t.type for t in tokens]
         self.assertEqual(token_types, ['NL', 'INDENT', 'NL', 'DEDENT'])
 
     def test_multiple_dedent(self):
-        tokens = list(tokenize('\n \n  \n   \n    \n  \n'))
+        tokens = tokenize('\n \n  \n   \n    \n  \n')
         token_types = [t.type for t in tokens]
         expected = [
                 'NL', 'INDENT', 'NL', 'INDENT', 'NL', 'INDENT',
@@ -30,7 +30,7 @@ class TestTokenize(unittest.TestCase):
         self.assertEqual(token_types, expected)
 
     def test_intermediate_dedent_to_zero(self):
-        tokens = list(tokenize('\n a\n  b\n   c\n    d\nabc\n  a'))
+        tokens = tokenize('\n a\n  b\n   c\n    d\nabc\n  a')
         token_types = [t.type for t in tokens]
         expected = [
                 'NL', 'INDENT', 'ID', 'NL', 'INDENT', 'ID', 'NL',
@@ -40,84 +40,93 @@ class TestTokenize(unittest.TestCase):
         ]
         self.assertEqual(token_types, expected)
 
+    def test_comment_indent(self):
+        tokens = tokenize('\n  # \na # b\n # c')
+        token_types = [t.type for t in tokens]
+        expected = [
+                'NL', 'ID', 'NL'
+        ]
+        self.assertEqual(token_types, expected)
+
     def test_bad_indent(self):
         with self.assertRaises(LexerError):
-            list(tokenize('\n\t\n \t'))
+            tokenize('\n\t\n \t')
 
     def test_bad_dedent(self):
         with self.assertRaises(LexerError):
-            list(tokenize('\n\t\n\t \n '))
+            tokenize('\n\t\n\t \n ')
 
     def test_paren_mismatch1(self):
         with self.assertRaises(LexerError):
-            list(tokenize('(]'))
+            tokenize('(]')
 
     def test_paren_mismatch2(self):
         with self.assertRaises(LexerError):
-            list(tokenize('[)'))
+            tokenize('[)')
 
     def test_paren_mismatch_nested1(self):
         with self.assertRaises(LexerError):
-            list(tokenize('[(([])])'))
+            tokenize('[(([])])')
 
     def test_paren_mismatch_nested2(self):
         with self.assertRaises(LexerError):
-            list(tokenize('([[()])]'))
+            tokenize('([[()])]')
 
     def test_paren_unopened1(self):
         with self.assertRaises(LexerError):
-            list(tokenize(')'))
+            tokenize(')')
 
     def test_paren_unopened2(self):
         with self.assertRaises(LexerError):
-            list(tokenize(']'))
+            tokenize(']')
 
     def test_paren_unclosed1(self):
         with self.assertRaises(LexerError):
-            list(tokenize('('))
+            tokenize('(')
 
     def test_paren_unclosed2(self):
-        with self.assertRaises(LexerError): list(tokenize('['))
+        with self.assertRaises(LexerError):
+            tokenize('[')
 
     def test_nonstart_annotation(self):
         with self.assertRaises(LexerError):
-            list(tokenize(' @'))
+            tokenize(' @')
 
     def test_id(self):
         with self.assertRaises(LexerError):
-            next(tokenize('-abc'))
+            tokenize('-abc')
         with self.assertRaises(LexerError):
-            next(tokenize('_abc'))
+            tokenize('_abc')
         with self.assertRaises(LexerError):
-            list(tokenize('abc-'))
+            tokenize('abc-')
         with self.assertRaises(LexerError):
-            list(tokenize('abc_'))
-        self.assertEqual(list(tokenize('abc_d0-3')), [
+            tokenize('abc_')
+        self.assertEqual(tokenize('abc_d0-3'), [
             Token('ID', 'abc_d0-3'),
             Token('NL', '')
         ])
-        self.assertEqual(list(tokenize('0ab34')), [
+        self.assertEqual(tokenize('0ab34'), [
             Token('ID', '0ab34'),
             Token('NL', '')
         ])
-        self.assertEqual(list(tokenize('013-34')), [
+        self.assertEqual(tokenize('013-34'), [
             Token('ID', '013-34'),
             Token('NL', '')
         ])
-        self.assertNotEqual(list(tokenize('01334')), [
+        self.assertNotEqual(tokenize('01334'), [
             Token('ID', '01334'),
             Token('NL', '')
         ])
-        self.assertEqual(list(tokenize('01-a')), [
+        self.assertEqual(tokenize('01-a'), [
             Token('ID', '01-a'),
             Token('NL', '')
         ])
-        self.assertEqual(list(tokenize('01A_B_C')), [
+        self.assertEqual(tokenize('01A_B_C'), [
             Token('ID', '01A_B_C'),
             Token('NL', '')
         ])
         with self.assertRaises(LexerError):
-            list(tokenize('01-'))
+            tokenize('01-')
 
     def test_example(self):
         src = ''' \
@@ -153,7 +162,7 @@ class TestTokenize(unittest.TestCase):
             'DEDENT', 'DEDENT', 'DEDENT', 'DEDENT',
         ]
 
-        tokens = list(tokenize(src))
+        tokens = tokenize(src)
         token_types = [t.type for t in tokens]
         self.assertEqual(token_types, expected)
 
@@ -206,7 +215,7 @@ class TestParser(unittest.TestCase):
                 with open(f'{TestParser.TEST_DIR}/{c}.evfl', 'rt') as ef:
                     evfl = ef.read()
 
-                tokens = list(tokenize(evfl))
+                tokens = tokenize(evfl)
 
                 if err is not None:
                     with self.assertRaises(err):

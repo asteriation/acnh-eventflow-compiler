@@ -18,7 +18,7 @@ def compare_indent(base: str, new: str, pos: Tuple[int, int]) -> int:
         return 1
     raise LexerError(pos, f'mixed tab/space indent')
 
-def tokenize(string: str) -> Generator[Token, None, None]:
+def tokenize(string: str) -> List[Token]:
     specs = [
         ('ANNOTATION', (r'@[^\r\n]*\r?\n',)),
         ('COMMENT', (r'#[^\r\n]*',)),
@@ -60,7 +60,7 @@ def tokenize(string: str) -> Generator[Token, None, None]:
         string = string + '\n'
 
     num_lines = len(re.findall(r'\r\n|\r|\n', string))
-    last_token = None
+    tokens = []
     space_since_nl = False
     first_non_annotation = False
     for x in t(string):
@@ -70,6 +70,9 @@ def tokenize(string: str) -> Generator[Token, None, None]:
             raise LexerError(x.start, "unexpected '@' - annotations must be at the top of the file")
 
         if x.type == 'COMMENT':
+            if tokens and tokens[-1].type == 'INDENT':
+                indent.pop()
+                tokens.pop()
             continue
         elif x.type == 'LPAREN':
             pstack.append(x)
@@ -88,13 +91,13 @@ def tokenize(string: str) -> Generator[Token, None, None]:
         elif x.type == 'NL':
             if pstack:
                 continue
-            if last_token and last_token.type == 'NL':
+            if tokens and tokens[-1].type == 'NL':
                 continue
             x = Token('NL', '', start=x.start, end=x.end)
             space_since_nl = False
         elif x.type == 'SP':
             space_since_nl = True
-            if last_token and last_token.type == 'NL':
+            if tokens and tokens[-1].type == 'NL':
                 indent_diff = compare_indent(indent[-1], x.name, x.start)
                 if indent_diff < 0:
                     found = False
@@ -103,8 +106,7 @@ def tokenize(string: str) -> Generator[Token, None, None]:
                         if s == x.name:
                             indent.append(s)
                             break
-                        last_token = Token('DEDENT', '', start=x.start, end=x.end)
-                        yield last_token
+                        tokens.append(Token('DEDENT', '', start=x.start, end=x.end))
                     if not indent:
                         raise LexerError(x.end, 'dedent to unknown level')
                     continue
@@ -116,21 +118,21 @@ def tokenize(string: str) -> Generator[Token, None, None]:
             else:
                 continue
 
-        if x.type != 'INDENT' and last_token and last_token.type == 'NL' and not space_since_nl:
+        if x.type != 'INDENT' and tokens and tokens[-1].type == 'NL' and not space_since_nl:
             while len(indent) > 1:
                 s = indent.pop()
-                last_token = Token('DEDENT', '', start=x.start, end=x.end)
-                yield last_token
+                tokens.append(Token('DEDENT', '', start=x.start, end=x.end))
 
-        last_token = x
-        yield last_token
+        tokens.append(x)
 
     if pstack:
         raise LexerError((num_lines + 1, 0), 'unclosed parentheses/brackets')
 
     while indent[-1]:
         indent.pop()
-        yield Token('DEDENT', '', start=(num_lines + 1, 0), end=(num_lines + 1, 0))
+        tokens.append(Token('DEDENT', '', start=(num_lines + 1, 0), end=(num_lines + 1, 0)))
+
+    return tokens
 
 def process_actor_annotations(seq: List[Token]) -> Tuple[Dict[str, str], List[Token]]:
     i = 0

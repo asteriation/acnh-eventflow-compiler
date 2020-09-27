@@ -69,7 +69,7 @@ if __name__ == '__main__':
         with if_.open('rt') as f:
             evfl = f.read()
 
-        tokens = list(tokenize(evfl))
+        tokens = tokenize(evfl)
         roots, actors = parse(tokens, actor_gen)
 
         nodes: Set[Node] = set()
