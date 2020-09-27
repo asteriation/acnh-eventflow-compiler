@@ -41,6 +41,15 @@ class Query:
         self.num_values = rv.num_values()
         self.used = False
 
+    def prepare_param_dict(self, params: List[TypedValue]) -> Dict[str, TypedValue]:
+        assert len(self.params) == len(params), f'{self.name}: expected {len(self.params)} params, got {len(params)}'
+        d = {}
+        for param, value in zip(self.params, params):
+            assert param.type == value.type, f'{self.name}: expected {param.type} for {param.name}, got {value.type}'
+            d[param.name] = value
+
+        return d
+
     def mark_used(self) -> None:
         self.used = True
 
@@ -63,8 +72,11 @@ class Actor:
         self.actions[action.name].mark_used()
 
     def register_query(self, query: Query) -> None:
-        if query.name not in self.queries or True: # TODO
+        if query.name not in self.queries:
             self.queries[query.name] = query
+
+    def use_query(self, query: Query) -> None:
+        self.queries[query.name].mark_used()
 
     def __str__(self):
         return f'Actor {self.name}\n' + '\n'.join([
