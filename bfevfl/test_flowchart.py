@@ -4,13 +4,14 @@ import unittest
 
 from bitstring import Bits, pack
 
-from .datatype import TypedValue, IntType, FloatType, BoolType
+from .datatype import TypedValue, IntType, FloatType, BoolType, StrType
 from .actors import Actor, Action, Query
 from .str_ import String, StringPool
 from .dic_ import Dictionary
 from .array import BlockArray, BlockPtrArray, Uint16Array
 from .container import Container
-from .flowchart import (_Actor, _Event, _ActionEvent, _ForkEvent, _JoinEvent, _SubflowEvent,
+from .flowchart import (_Actor, _Event, _ActionEvent, _SwitchEvent, _ForkEvent, _JoinEvent,
+        _SwitchCase, _SwitchData, _SubflowEvent,
         _VarDef, _Pad24, _Entrypoint, _FlowchartHeader, Flowchart)
 
 class Test_Actor(unittest.TestCase):
@@ -76,6 +77,78 @@ class Test_ActionEvent(unittest.TestCase):
                 Bits(b'\0\0\1\0\1\0\3\0') +
                 pack('uintle:64', params.offset) +
                 Bits(b'\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0')
+        )
+
+class Test_SwitchCase(unittest.TestCase):
+    def test(self):
+        s = _SwitchCase(2, 0x3433)
+
+        self.assertEqual(s.get_all_pointers(), [])
+        self.assertEqual(s.prepare_bitstream(), Bits(b'\2\0\0\0\x33\x34'))
+
+class Test_SwitchData(unittest.TestCase):
+    def test_no_params(self):
+        s = BlockArray([
+            _SwitchCase(0, 100),
+            _SwitchCase(2, 400),
+            _SwitchCase(1, 300),
+        ])
+        sd = _SwitchData(None, s)
+        self.assertEqual(sd.prepare_bitstream(), s.prepare_bitstream())
+
+    def test_params(self):
+        sp = StringPool(['param0', 'param1'])
+        p = Container({'param0': TypedValue(StrType, 'abcd'), 'param1': TypedValue(IntType, 3)}, sp)
+        s = BlockArray([
+            _SwitchCase(0, 100),
+            _SwitchCase(2, 400),
+            _SwitchCase(1, 300),
+        ])
+        sd = _SwitchData(p, s)
+        pad = Bits(b'\0' * ((8 - len(p) % 8) % 8))
+        self.assertEqual(sd.prepare_bitstream(), p.prepare_bitstream() + pad + s.prepare_bitstream())
+
+class Test_SwitchEvent(unittest.TestCase):
+    def setUp(self):
+        self.sp = StringPool(['switch', 'param0', 'param1'])
+
+    def test_no_params(self):
+        cases = BlockArray[_SwitchCase]([
+            _SwitchCase(0, 500),
+            _SwitchCase(5, 700),
+            _SwitchCase(2, 500),
+            _SwitchCase(3, 300),
+        ])
+        cases.offset = 1982471298
+        switch = _SwitchEvent('switch', 3, 7, None, cases, self.sp)
+
+        self.assertEqual(switch.get_all_pointers(), [0, 24])
+        self.assertEqual(switch.prepare_bitstream(),
+                pack('uintle:64', self.sp['switch'].offset) +
+                Bits(b'\1\0\4\0\3\0\7\0') +
+                pack('uintle:64', 0) +
+                pack('uintle:64', cases.offset) +
+                pack('uintle:64', 0)
+        )
+
+    def test_params(self):
+        cases = BlockArray[_SwitchCase]([
+            _SwitchCase(0, 500),
+            _SwitchCase(5, 700),
+            _SwitchCase(2, 500),
+        ])
+        cases.offset = 1982471298
+        p = Container({'param0': TypedValue(StrType, 'abcd'), 'param1': TypedValue(IntType, 3)}, self.sp)
+        p.offset = 18597124
+        switch = _SwitchEvent('switch', 2, 6, p, cases, self.sp)
+
+        self.assertEqual(switch.get_all_pointers(), [0, 16, 24])
+        self.assertEqual(switch.prepare_bitstream(),
+                pack('uintle:64', self.sp['switch'].offset) +
+                Bits(b'\1\0\3\0\2\0\6\0') +
+                pack('uintle:64', p.offset) +
+                pack('uintle:64', cases.offset) +
+                pack('uintle:64', 0)
         )
 
 class Test_ForkEvent(unittest.TestCase):

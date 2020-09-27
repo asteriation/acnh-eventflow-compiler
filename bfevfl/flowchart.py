@@ -7,7 +7,7 @@ from bitstring import BitStream, pack
 
 from .datatype import TypedValue
 from .actors import Actor
-from .nodes import Node, RootNode, ActionNode, ForkNode, JoinNode, SubflowNode
+from .nodes import Node, RootNode, ActionNode, SwitchNode, ForkNode, JoinNode, SubflowNode
 from .block import DataBlock, ContainerBlock, Block
 from .str_ import StringPool, String
 from .dic_ import Dictionary
@@ -34,7 +34,25 @@ class _Actor(DataBlock):
     def alignment(self) -> int:
         return 8
 
-_EventData = Union[Container, Uint16Array]
+class _SwitchCase(DataBlock):
+    def __init__(self, value: int, event_index: int) -> None:
+        super().__init__(6)
+
+        with self._at_offset(0):
+            self.buffer.overwrite(pack('uintle:32', value))
+            self.buffer.overwrite(pack('uintle:16', event_index))
+
+    def alignment(self) -> int:
+        return 8
+
+class _SwitchData(ContainerBlock):
+    def __init__(self, params: Optional[Container], cases: BlockArray[_SwitchCase]) -> None:
+        super().__init__(([params] if params else []) + [cases]) # type: ignore
+
+    def alignment(self) -> int:
+        return 8
+
+_EventData = Union[Container, Uint16Array, _SwitchData]
 
 class _Event(DataBlock):
     def  __init__(self, name: str, event_type: int, pool: StringPool) -> None:
@@ -59,7 +77,18 @@ class _ActionEvent(_Event):
 
         self._add_pointer(0x10, params)
 
-# TODO query
+class _SwitchEvent(_Event):
+    def __init__(self, name: str, actor_index: int, query_index: int,
+                 params: Optional[Container], cases: BlockArray[_SwitchCase], pool: StringPool) -> None:
+        super().__init__(name, 1, pool)
+
+        with self._at_offset(0xa):
+            self.buffer.overwrite(pack('uintle:16', cases.n))
+            self.buffer.overwrite(pack('uintle:16', actor_index))
+            self.buffer.overwrite(pack('uintle:16', query_index))
+
+        self._add_pointer(0x10, params)
+        self._add_pointer(0x18, cases)
 
 class _ForkEvent(_Event):
     def __init__(self, name: str, forks: Uint16Array, join_index: int, pool: StringPool) -> None:
@@ -266,6 +295,18 @@ class Flowchart(ContainerBlock):
 
                 ev = _ActionEvent(event.name, nxt, actor_index, action_index, params, pool)
                 evdata = params
+            elif isinstance(event, SwitchNode):
+                num_cases = len(event.cases)
+                actor_index = actor_indices[event.query.actor_name]
+                query_index = query_indices[event.query.actor_name][event.query.name]
+                params = Container(event.params, pool) if event.params else None
+                cases = BlockArray([
+                    _SwitchCase(v, event_indices[n])
+                    for n, vs in event.cases.items() for v in vs
+                ])
+
+                ev = _SwitchEvent(event.name, actor_index, query_index, params, cases, pool)
+                evdata = _SwitchData(params, cases)
             elif isinstance(event, ForkNode):
                 forks = Uint16Array([event_indices[e] for e in event.out_edges if e != event.join_node])
                 join_index = event_indices[event.join_node]
