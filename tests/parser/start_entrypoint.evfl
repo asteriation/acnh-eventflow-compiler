@@ -1,0 +1,4 @@
+flow Test():
+entrypoint EP1:
+    TestActor1.Action0()
+

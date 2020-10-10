@@ -1,0 +1,12 @@
+flow Test():
+    TestActor1.Action0()
+entrypoint EP1:
+    pass
+entrypoint EP2:
+    TestActor2.Action0()
+entrypoint EP3:
+    return
+
+flow Test2():
+    TestActor1.Action0()
+

@@ -1,0 +1,5 @@
+RootNode[name=EP1, vardefs=[], out_edges=[Event2]]
+RootNode[name=Test, vardefs=[], out_edges=[Event0]]
+ActionNode[name=Event0, action=EventFlowActionAction0(), params={}, out_edges=[Event2]]
+ActionNode[name=Event2, action=EventFlowActionAction0(), params={}, out_edges=[]]
+

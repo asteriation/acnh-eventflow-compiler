@@ -136,6 +136,36 @@ class TestTokenize(unittest.TestCase):
         with self.assertRaises(LexerError):
             tokenize('01-')
 
+    def test_entrypoints1(self):
+        tokens = tokenize('\nentrypoint a:\n\ta\nentrypoint b:\n\tc')
+        token_types = [t.type for t in tokens]
+        expected = [
+                'NL', 'INDENT', 'KW', 'ID', 'COLON', 'NL', 'ID', 'NL', 
+                'KW', 'ID', 'COLON', 'NL', 'ID', 'NL', 'DEDENT',
+        ]
+        self.assertEqual(token_types, expected)
+
+    def test_entrypoints2(self):
+        tokens = tokenize('\na\nentrypoint b:\n\tc')
+        token_types = [t.type for t in tokens]
+        expected = [
+                'NL', 'ID', 'NL', 'INDENT', 'KW', 'ID', 'COLON', 'NL', 'ID', 'NL', 'DEDENT',
+        ]
+        self.assertEqual(token_types, expected)
+
+    def test_entrypoints3(self):
+        tokens = tokenize('\n\ta\n\t\tb\nentrypoint c:\nd')
+        token_types = [t.type for t in tokens]
+        expected = [
+                'NL', 'INDENT', 'ID', 'NL', 'INDENT', 'ID', 'NL', 'DEDENT', 'DEDENT', 
+                'KW', 'ID', 'COLON', 'NL', 'ID', 'NL',
+        ]
+        self.assertEqual(token_types, expected)
+
+    def test_entrypoints4(self):
+        with self.assertRaises(LexerError):
+            tokenize('\nentrypoint e:\n')
+
     def test_example(self):
         src = ''' \
             flow Test(a: int = 5, b: float = 3.0): # comment
@@ -190,10 +220,16 @@ class TestParser(unittest.TestCase):
         ('annotation', None),
         ('leading_comments', None),
         ('subflow', None),
+        ('simple_entrypoint', None),
+        ('entrypoint', None),
+        ('start_entrypoint', None),
+        # ('switch_entrypoint', None),
+        ('fork_entrypoint', None),
         ('err_out_of_flow', NoParseError),
         ('err_fork_no_branch', NoParseError),
         ('err_fork_pass', NoParseError),
         ('err_fork_action', NoParseError),
+        ('err_consecutive_entrypoint', NoParseError),
     ]
 
     TEST_DIR = 'tests/parser/'
@@ -214,11 +250,11 @@ class TestParser(unittest.TestCase):
             Param('param2', FloatType),
             Param('param3', BoolType),
         ]))
-        actor.register_query(Query(name, 'EventFlowActionQuery0', [], Type('int3'), False))
-        actor.register_query(Query(name, 'EventFlowActionQuery1', [
+        actor.register_query(Query(name, 'EventFlowQueryQuery0', [], Type('int3'), False))
+        actor.register_query(Query(name, 'EventFlowQueryQuery1', [
             Param('param0', IntType),
         ], Type('bool'), False))
-        actor.register_query(Query(name, 'EventFlowActionQuery2', [
+        actor.register_query(Query(name, 'EventFlowQueryQuery2', [
             Param('param0', IntType),
         ], Type('bool'), True))
 
@@ -233,6 +269,7 @@ class TestParser(unittest.TestCase):
         return actor
 
     def test_files(self):
+        self.maxDiff = None
         for c, err in TestParser.CASES:
             with self.subTest(msg=f'test_{c}'):
                 with open(f'{TestParser.TEST_DIR}/{c}.evfl', 'rt') as ef:
@@ -256,12 +293,12 @@ class TestParser(unittest.TestCase):
 
 def extract_and_sort_nodes(roots: List[RootNode]) -> List[Node]:
     # order: RootNodes (sort by name), non-Root (sort by name)
-    int_nodes: List[Node] = []
+    int_nodes: Set[Node] = set()
     for root in roots:
-        int_nodes.extend([x for x in find_postorder(root)
+        int_nodes.update([x for x in find_postorder(root)
                 if not isinstance(x, RootNode)])
 
     roots = sorted(roots, key=lambda x: x.name)
-    int_nodes = sorted(int_nodes, key=lambda x: x.name)
-    return roots + int_nodes # type: ignore
+    int_nodes_l = sorted(int_nodes, key=lambda x: x.name)
+    return roots + int_nodes_l # type: ignore
 

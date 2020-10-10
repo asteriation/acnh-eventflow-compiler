@@ -1,0 +1,12 @@
+flow Test():
+    fork:
+        branch:
+entrypoint EP1:
+            TestActor1.Action0()
+        branch:
+            TestActor2.Action0()
+entrypoint EP2:
+            TestActor1.Action0()
+entrypoint EP3:
+    TestActor1.Action0()
+

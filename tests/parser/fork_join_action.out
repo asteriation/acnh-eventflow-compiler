@@ -1,7 +1,7 @@
-RootNode[name=Test, vardefs=[], out_edges=[Event4]]
+RootNode[name=Test, vardefs=[], out_edges=[Event6]]
 ActionNode[name=Event0, action=EventFlowActionAction0(), params={}, out_edges=[]]
-ActionNode[name=Event2, action=EventFlowActionAction0(), params={}, out_edges=[]]
-ForkNode[name=Event4, join_node=Event5, out_edges=[Event0, Event2, Event5]]
-JoinNode[name=Event5, out_edges=[Event6]]
-ActionNode[name=Event6, action=EventFlowActionAction0(), params={}, out_edges=[]]
+ActionNode[name=Event3, action=EventFlowActionAction0(), params={}, out_edges=[]]
+ForkNode[name=Event6, join_node=Event7, out_edges=[Event0, Event3, Event7]]
+JoinNode[name=Event7, out_edges=[Event8]]
+ActionNode[name=Event8, action=EventFlowActionAction0(), params={}, out_edges=[]]
 

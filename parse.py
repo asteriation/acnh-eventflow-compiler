@@ -65,8 +65,12 @@ def tokenize(string: str) -> List[Token]:
 
     num_lines = len(re.findall(r'\r\n|\r|\n', string))
     tokens: List[Token] = []
+    buffered: List[Token] = []
     space_since_nl = False
     first_non_annotation = False
+    buffering = False
+
+    emit_token = lambda tok: (buffered if buffering else tokens).append(tok)
     for x in t(string):
         if x.type != 'ANNOTATION':
             first_non_annotation = True
@@ -96,12 +100,16 @@ def tokenize(string: str) -> List[Token]:
             if pstack:
                 continue
             space_since_nl = False
-            if tokens and tokens[-1].type == 'NL':
+            if tokens and tokens[-1].type == 'NL' and not buffering:
                 continue
             x = Token('NL', '', start=x.start, end=x.end)
+        elif x.type == 'KW' and x.name == 'entrypoint':
+            if space_since_nl:
+                raise LexerError(x.start, 'entrypoint must be unindented')
+            buffering = True
         elif x.type == 'SP':
             space_since_nl = True
-            if tokens and tokens[-1].type == 'NL':
+            if tokens and tokens[-1].type == 'NL' and not buffering:
                 indent_diff = compare_indent(indent[-1], x.name, x.start)
                 if indent_diff < 0:
                     found = False
@@ -110,23 +118,38 @@ def tokenize(string: str) -> List[Token]:
                         if s == x.name:
                             indent.append(s)
                             break
-                        tokens.append(Token('DEDENT', '', start=x.start, end=x.end))
+                        emit_token(Token('DEDENT', '', start=x.start, end=x.end))
                     if not indent:
                         raise LexerError(x.end, 'dedent to unknown level')
                 elif indent_diff > 0:
                     indent.append(x.name)
-                    tokens.append(Token('INDENT', '', start=x.start, end=x.end))
+                    emit_token(Token('INDENT', '', start=x.start, end=x.end))
+
+            if not buffering and buffered:
+                tokens.extend(buffered)
+                buffered = []
+
             continue
 
-        if x.type != 'INDENT' and tokens and tokens[-1].type == 'NL' and not space_since_nl:
+        if x.type != 'INDENT' and tokens and tokens[-1].type == 'NL' and not space_since_nl \
+                and not buffering:
             while len(indent) > 1:
                 s = indent.pop()
-                tokens.append(Token('DEDENT', '', start=x.start, end=x.end))
+                emit_token(Token('DEDENT', '', start=x.start, end=x.end))
+            if not buffering and buffered:
+                tokens.extend(buffered)
+                buffered = []
 
-        tokens.append(x)
+        emit_token(x)
+
+        if x.type == 'NL':
+            buffering = False
 
     if pstack:
         raise LexerError((num_lines + 1, 0), 'unclosed parentheses/brackets')
+
+    if buffering or buffered:
+        raise LexerError((num_lines + 1, 0), 'unexpected end of file')
 
     while indent[-1]:
         indent.pop()
@@ -185,7 +208,7 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
         except AssertionError as e:
             raise e # todo: better messages
 
-        return ActionNode(f'Event{next_id()}', action, pdict)
+        return (), (ActionNode(f'Event{next_id()}', action, pdict),)
 
     def make_case(n):
         if isinstance(n, tuple):
@@ -236,13 +259,15 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
         elif default:
             LOG.warning(f'default branch for {query_name} call is dead code, ignoring')
 
-        return sw
+        return (), (sw,)
 
     def make_fork(n_):
-        for node, connector in n_:
-            assert node is not None, 'empty branch in fork not allowed'
+        for entrypoints, node, connector in n_:
+            for ep in entrypoints:
+                __replace_node(ep, connector, None)
             __replace_node(node, connector, None)
-        n = [x for x, _ in n_]
+        eps = __flatten([ep for ep, _, _ in n_])
+        n = [x for _, x, _ in n_]
 
         fork_id, join_id = next_id(), next_id()
         join = JoinNode(f'Event{join_id}')
@@ -251,7 +276,7 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
         for node in n:
             fork.add_out_edge(node)
 
-        return fork, join
+        return eps, (fork, join)
 
     def make_subflow_param(n):
         return (n,)
@@ -259,47 +284,68 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
     def make_subflow(n):
         ns, name, params = n
         param_dict = {k[0][0]: k[0][1] for k in params}
-        return SubflowNode(f'Event{next_id()}', ns or '', name, param_dict)
+        return (), (SubflowNode(f'Event{next_id()}', ns or '', name, param_dict),)
 
     def make_none(_):
         return None
 
     def make_return(_):
-        return TerminalNode
+        return (), (TerminalNode,)
 
     def make_flow(n):
         name, params, body = n
-        body_root, body_connector = body
+        entrypoints, body_root, body_connector = body
         assert not params, 'vardefs todo'
         node = RootNode(name, [])
         node.add_out_edge(body_root)
         body_connector.add_out_edge(TerminalNode)
-        return node
+        return list(entrypoints) + [node]
 
-    def link_block(n):
+    def link_ep_block(n):
         connector = ConnectorNode(f'Connector{next_id()}')
+        ep, block_info = n
+        block_info = [x for x in block_info if x is not None]
+        if block_info:
+            eps, block = (__flatten(p) for p in zip(*(x for x in block_info if x is not None)))
+        else:
+            eps, block = [], ()
 
-        if n is None:
-            return (connector, connector)
+        if not block:
+            if ep is not None:
+                ep_node = RootNode(ep, [])
+                ep_node.add_out_edge(connector)
+                eps.append(ep_node)
+            return (eps, connector, connector)
 
-        n = __flatten_nodes(n)
-        n = [x for x in n if x is not None]
-
-        if not n:
-            return (connector, connector)
-
-        for n1, n2 in zip(n, n[1:] + [connector]):
+        for n1, n2 in zip(block, block[1:] + [connector]):
             if isinstance(n1, SwitchNode):
                 n1.connector.add_out_edge(n2)
             else:
                 n1.add_out_edge(n2)
-        return (n[0], connector)
+
+        if ep is not None:
+            ep_node = RootNode(ep, [])
+            ep_node.add_out_edge(block[0])
+            eps.append(ep_node)
+
+        return (eps, block[0], connector)
+
+    def link_block(n):
+        connector = ConnectorNode(f'Connector{next_id()}')
+        n = make_array(n)
+        eps, blocks, connectors = zip(*n)
+        eps = __flatten(eps)
+
+        for connector, block in zip(connectors[:-1], blocks[1:]):
+            connector.add_out_edge(block)
+
+        return (eps, blocks[0], connectors[-1])
 
     def collect_flows(n):
         if n is None:
             return []
         else:
-            return [x for x in n if x is not None]
+            return __flatten([x for x in n if x is not None])
 
     block = forward_decl()
 
@@ -378,8 +424,17 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
     # stmt = action | switch | fork | run | pass_ | return | NL (todo: queries, blocks)
     stmt = action | switch | fork | run | pass_ | return_ | (tokop('NL') >> make_none)
 
-    # block_body = stmt { stmt }
-    block_body = stmt + many(stmt) >> link_block
+    # entrypoint = ENTRYPOINT id COLON NL
+    entrypoint = tokkw('entrypoint') + id_ + tokop('COLON') + tokop('NL')
+
+    # stmts = stmt { stmt }
+    stmts = stmt + many(stmt) >> make_array
+
+    # ep_block_body = [entrypoint] stmts
+    ep_block_body = maybe(entrypoint) + stmts >> link_ep_block
+
+    # block_body = ep_block_body { ep_block_body }
+    block_body = ep_block_body + many(ep_block_body) >> link_block
 
     # block = COLON NL INDENT block_body DEDENT
     block.define(tokop('COLON') + tokop('NL') + tokop('INDENT') + block_body + tokop('DEDENT'))
@@ -425,12 +480,12 @@ def __replace_node(root: Node, replace: Node, replacement: Optional[Node]) -> No
             else:
                 node.reroute_out_edge(replace, replacement)
 
-def __flatten_nodes_helper(lst: Iterable[Any]) -> Generator[Node, None, None]:
+def __flatten_helper(lst: Iterable[Any]) -> Generator[Any, None, None]:
     for x in lst:
         if isinstance(x, Iterable):
-            yield from __flatten_nodes_helper(x)
+            yield from __flatten_helper(x)
         else:
             yield x
 
-def __flatten_nodes(lst: Sequence[Any]) -> List[Node]:
-    return list(__flatten_nodes_helper(lst))
+def __flatten(lst: Sequence[Any]) -> List[Any]:
+    return list(__flatten_helper(lst))
