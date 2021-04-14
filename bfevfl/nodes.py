@@ -96,7 +96,7 @@ class SwitchNode(Node):
         return f'SwitchNode[name={self.name}' + \
             f', query={self.query}' + \
             f', params={self.params}' + \
-            f', cases={self.cases}' + \
+            f', cases={({k.name: v for k, v in self.cases.items()})}' + \
             f', out_edges=[{", ".join(n.name for n in self.out_edges)}]' + \
             ']'
 

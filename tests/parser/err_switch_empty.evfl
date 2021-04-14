@@ -1,0 +1,2 @@
+flow Test():
+    switch TestActor1.Query0():

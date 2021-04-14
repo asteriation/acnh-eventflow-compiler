@@ -232,8 +232,10 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
             raise e # todo: better error messages
 
         sw = SwitchNode(f'Event{next_id()}', query, pdict)
+        entrypoints = []
         for values, block in cases:
-            node, connector = block
+            eps, node, connector = block
+            entrypoints.extend(eps)
 
             sw.add_out_edge(node)
             connector.add_out_edge(sw.connector)
@@ -259,7 +261,7 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
         elif default:
             LOG.warning(f'default branch for {query_name} call is dead code, ignoring')
 
-        return (), (sw,)
+        return entrypoints, (sw,)
 
     def make_fork(n_):
         for entrypoints, node, connector in n_:

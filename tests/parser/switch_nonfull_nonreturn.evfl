@@ -1,0 +1,7 @@
+flow Test():
+    switch TestActor1.Query0():
+        case 0:
+            TestActor1.Action0()
+        case 1:
+            TestActor2.Action0()
+    TestActor1.Action0()

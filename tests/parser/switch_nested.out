@@ -1,0 +1,6 @@
+RootNode[name=Test, vardefs=[], out_edges=[Event6]]
+ActionNode[name=Event0, action=EventFlowActionAction0(), params={}, out_edges=[Event7]]
+SwitchNode[name=Event3, query=EventFlowQueryQuery1(param0), params={'param0': TypedValue(type=Type(type='int'), value=1)}, cases={'Event0': [0], 'Event7': [1]}, out_edges=[Event0, Event7]]
+SwitchNode[name=Event6, query=EventFlowQueryQuery0(), params={}, cases={'Event3': [1], 'Event7': [0, 2]}, out_edges=[Event3, Event7]]
+ActionNode[name=Event7, action=EventFlowActionAction1(param0), params={'param0': TypedValue(type=Type(type='int'), value=0)}, out_edges=[]]
+

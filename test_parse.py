@@ -220,19 +220,27 @@ class TestParser(unittest.TestCase):
         ('annotation', None),
         ('leading_comments', None),
         ('subflow', None),
+        ('switch_nonfull', None),
+        ('switch_full', None),
+        ('switch_nonfull_nonreturn', None),
+        ('switch_full_nonreturn', None),
+        ('switch_nested', None),
         ('simple_entrypoint', None),
         ('entrypoint', None),
         ('start_entrypoint', None),
-        # ('switch_entrypoint', None),
+        ('switch_entrypoint', None),
         ('fork_entrypoint', None),
         ('err_out_of_flow', NoParseError),
         ('err_fork_no_branch', NoParseError),
         ('err_fork_pass', NoParseError),
         ('err_fork_action', NoParseError),
+        ('err_switch_empty', NoParseError),
+        ('err_switch_case_empty', NoParseError),
+        ('err_switch_pass', NoParseError),
         ('err_consecutive_entrypoint', NoParseError),
     ]
 
-    TEST_DIR = 'tests/parser/'
+    TEST_DIR = 'tests/parser'
 
     def generate_actor(self, name: str, secondary_name: str) -> Actor:
         actor = Actor(name, secondary_name)
@@ -257,14 +265,6 @@ class TestParser(unittest.TestCase):
         actor.register_query(Query(name, 'EventFlowQueryQuery2', [
             Param('param0', IntType),
         ], Type('bool'), True))
-
-        # switch (full)
-        # switch (nonfull)
-        # error: switch (empty)
-        # switch non-return join (full)
-        # switch non-return join (nonfull)
-        # nested switch (joined end)
-        # nested switch (action end)
 
         return actor
 
@@ -298,7 +298,14 @@ def extract_and_sort_nodes(roots: List[RootNode]) -> List[Node]:
         int_nodes.update([x for x in find_postorder(root)
                 if not isinstance(x, RootNode)])
 
-    roots = sorted(roots, key=lambda x: x.name)
-    int_nodes_l = sorted(int_nodes, key=lambda x: x.name)
+    def split(name):
+        if not name[-1].isnumeric() or name.isnumeric():
+            return (name, 0)
+        j = 0
+        while name[j - 1].isnumeric():
+            j -= 1
+        return (name[:j], int(name[j:]))
+    roots = sorted(roots, key=lambda x: split(x.name))
+    int_nodes_l = sorted(int_nodes, key=lambda x: split(x.name))
     return roots + int_nodes_l # type: ignore
 

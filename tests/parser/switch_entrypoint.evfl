@@ -1,0 +1,12 @@
+flow Test():
+    switch TestActor1.Query0():
+        case 0, 1:
+entrypoint EP1:
+            TestActor1.Action0()
+        case 2:
+            TestActor2.Action0()
+entrypoint EP2:
+            TestActor2.Action0()
+entrypoint EP3:
+    TestActor1.Action0()
+
