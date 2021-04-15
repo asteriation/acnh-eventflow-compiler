@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import csv
 from pathlib import Path
 import sys
-from typing import Set
+from typing import Set, Callable, List, Tuple
 
-from bfevfl.datatype import IntType, StrType, BoolType
+from bfevfl.datatype import IntType, StrType, BoolType, Type
 from bfevfl.actors import Actor, Action, Query, Param
 from bfevfl.nodes import Node, ActionNode, SwitchNode, SubflowNode
 from bfevfl.file import File
@@ -13,24 +14,54 @@ from bfevfl.file import File
 from parse import tokenize, parse
 from util import find_postorder
 
-def actor_gen(name: str, secondary_name: str) -> Actor:
-    actor = Actor(name, secondary_name)
-    actor.register_action(Action(name, 'EventFlowActionWaitFrame', [Param('WaitFrame', IntType)]))
-    actor.register_action(Action(name, 'EventFlowActionPlayerClearFoodPowerup', []))
-    actor.register_action(Action(name, 'EventFlowActionOpenMessageWindow', [Param('MessageID', StrType), Param('IsCloseMessageWindow', BoolType)]))
-    actor.register_action(Action(name, 'EventFlowActionUIMoneyAppear', []))
-    actor.register_action(Action(name, 'EventFlowActionUIMoneyDisappear', []))
-    actor.register_action(Action(name, 'EventFlowActionUISonkatsuPointAppear', []))
-    actor.register_action(Action(name, 'EventFlowActionUISonkatsuPointDisappear', []))
-    actor.register_action(Action(name, 'EventFlowActionBellCountDown', [Param('Money', IntType), Param('Reverse', BoolType)]))
-    actor.register_action(Action(name, 'EventFlowActionLifeSupportPointCountDown', [Param('Point', IntType), Param('Reverse', BoolType)]))
-    actor.register_query(Query(name, 'EventFlowQueryHasBellCount', [Param('Money', IntType)], BoolType, True))
-    return actor
+def param_str_to_param(pstr: str) -> Param:
+    name, type_ = pstr.split(':')
+    name, type_ = name.strip(), type_.strip()
+    return Param(name, Type(type_))
+
+def compare_version(v1: str, v2: str) -> int:
+    t1 = tuple(int(p) for p in v1.split('.'))
+    t2 = tuple(int(p) for p in v2.split('.'))
+    if t1 < t2:
+        return -1
+    elif t1 > t2:
+        return 1
+    return 0
+
+def actor_gen_prepare(csvr, version: str) -> Callable[[str, str], Actor]:
+    actions: List[Tuple[str, List[Param]]] = []
+    queries: List[Tuple[str, List[Param], Type]] = []
+
+    # MaxVersion, Type, Name, Parameters[, Return]
+    header = next(csvr)
+    maxver_i, type_i, name_i, param_i, return_i = (header.index(s) for s in ('MaxVersion', 'Type', 'Name', 'Parameters', 'Return'))
+    for row in csvr:
+        maxver = row[maxver_i]
+        if maxver == 'pseudo' or compare_version(maxver, version) < 0:
+            continue
+        params = []
+        if row[param_i].strip():
+            params = [param_str_to_param(p) for p in row[param_i].split(';')]
+        if row[type_i] == 'Action':
+            actions.append(('EventFlowAction' + row[name_i], params))
+        else:
+            queries.append(('EventFlowQuery' + row[name_i], params, Type(row[type_i])))
+
+    def inner(name: str, secondary_name: str) -> Actor:
+        actor = Actor(name, secondary_name)
+        for aname, params in actions:
+            actor.register_action(Action(name, aname, params))
+        for qname, params, rtype in queries:
+            actor.register_query(Query(name, qname, params, rtype, True))
+        return actor
+
+    return inner
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-f', metavar='functions.csv', default='functions.csv',
             help='functions.csv for EventFlow function type information (default: ./functions.csv)')
+    parser.add_argument('-v', metavar='version', default='9.9.9', help='target game version (default: 9.9.9)')
     parser.add_argument('-d', metavar='output_directory', help='output directory')
     parser.add_argument('-o', metavar='file', help='file to output to, overrides -d, ' +
             'cannot be used for multiple input files')
@@ -41,11 +72,12 @@ if __name__ == '__main__':
         print('-o cannot be used with multiple input files', file=sys.stderr)
         sys.exit(1)
 
-    # fcsv = Path(args.f)
-    # if not fcsv.exists() or not fcsv.is_file():
-        # print(f'cannot open {args.f}', file=sys.stderr)
-        # sys.exit(1)
-    # actor_gen = lambda n: Actor(n)
+    fcsv = Path(args.f)
+    if not fcsv.exists() or not fcsv.is_file():
+        print(f'cannot open {args.f}', file=sys.stderr)
+        sys.exit(1)
+    with fcsv.open('rt') as f:
+        actor_gen = actor_gen_prepare(csv.reader(f), args.v)
 
     output_dir = Path('.')
     output_name = None
