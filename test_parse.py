@@ -217,6 +217,7 @@ class TestParser(unittest.TestCase):
         ('single_action_flow', None),
         ('multi_action_flow', None),
         ('multiple_flows', None),
+        ('local_unused', None),
         ('empty', None),
         ('newlines', None),
         ('comments_only', None),

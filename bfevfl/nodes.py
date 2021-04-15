@@ -42,8 +42,9 @@ class RootNode(Node):
         type_: Type
         initial_value: Union[int, bool, float]
 
-    def __init__(self, name: str, vardefs: List[VarDef] = []) -> None:
+    def __init__(self, name: str, local: bool = False, vardefs: List[VarDef] = []) -> None:
         Node.__init__(self, name)
+        self.local = local
         self.vardefs = vardefs[:]
 
     def __str__(self) -> str:

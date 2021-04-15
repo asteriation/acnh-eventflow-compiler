@@ -292,10 +292,10 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
         return (), (TerminalNode,)
 
     def make_flow(n):
-        name, params, body = n
+        local, name, params, body = n
         entrypoints, body_root, body_connector = body
         assert not params, 'vardefs todo'
-        node = RootNode(name, [])
+        node = RootNode(name, local is not None, [])
         node.add_out_edge(body_root)
         body_connector.add_out_edge(TerminalNode)
         return list(entrypoints) + [node]
@@ -445,9 +445,9 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
     # flow_params = [flow_param { COMMA flow_param }]
     flow_params = maybe(flow_param + many(tokop('COMMA') + flow_param)) >> make_array
 
-    # flow = FLOW ID LPAREN flow_params RPAREN block
+    # flow = [LOCAL] FLOW ID LPAREN flow_params RPAREN block
     flow = (
-        tokkw('flow') + id_ + tokop('LPAREN') + flow_params + tokop('RPAREN') + block
+        maybe(a(Token('ID', 'local'))) + tokkw('flow') + id_ + tokop('LPAREN') + flow_params + tokop('RPAREN') + block
     ) >> make_flow
 
     # file = { flow | NL }
@@ -459,7 +459,8 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
         __collapse_connectors(n)
         __replace_node(n, TerminalNode, None)
 
-    return roots, list(actors.values())
+    exported_roots = [r for r in roots if not r.local]
+    return exported_roots, list(actors.values())
 
 def __collapse_connectors(root: RootNode) -> None:
     remap: Dict[Node, Node] = {}
