@@ -38,9 +38,6 @@ def tokenize(string: str) -> List[Token]:
         ('PASSIGN', (r'\+=',)),
         ('DOT', (r'\.',)),
         ('COMMA', (r',',)),
-        ('TYPE', (r'int|float|str',)),
-        ('KW', (r'flow|internal|entrypoint|if|elif|else|do|while|fork|branch|return|pass|not|and|or|in|run|switch|case|default',)),
-        ('BOOL', (r'true|false',)),
         ('ID', (r'''
             [A-Za-z]
                 (?:
@@ -103,7 +100,7 @@ def tokenize(string: str) -> List[Token]:
             if tokens and tokens[-1].type == 'NL' and not buffering:
                 continue
             x = Token('NL', '', start=x.start, end=x.end)
-        elif x.type == 'KW' and x.name == 'entrypoint':
+        elif x.type == 'ID' and x.name == 'entrypoint':
             if space_since_nl:
                 raise LexerError(x.start, 'entrypoint must be unindented')
             buffering = True
@@ -173,7 +170,7 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
     tokval = lambda x: x.value
     toktype = lambda t: some(lambda x: x.type == t) >> tokval
     tokop = lambda typ: skip(some(lambda x: x.type == typ))
-    tokkw = lambda name: skip(a(Token('KW', name)))
+    tokkw = lambda name: skip(a(Token('ID', name)))
 
     def make_array(n):
         if n is None:
@@ -355,7 +352,8 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
     value = (
         toktype('INT') >> int_
         | toktype('FLOAT') >> float_
-        | toktype('BOOL') >> bool_
+        | tokkw('true') >> bool_
+        | tokkw('false') >> bool_
         | toktype('STRING') >> string
     )
 
@@ -423,7 +421,7 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
         tokkw('run') + flow_name + tokop('LPAREN') + subflow_params + tokop('RPAREN') + tokop('NL')
     ) >> make_subflow
 
-    # stmt = action | switch | fork | run | pass_ | return | NL (todo: queries, blocks)
+    # stmt = action | switch | fork | run | pass_ | return | NL
     stmt = action | switch | fork | run | pass_ | return_ | (tokop('NL') >> make_none)
 
     # entrypoint = ENTRYPOINT id COLON NL

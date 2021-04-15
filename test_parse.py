@@ -140,8 +140,8 @@ class TestTokenize(unittest.TestCase):
         tokens = tokenize('\nentrypoint a:\n\ta\nentrypoint b:\n\tc')
         token_types = [t.type for t in tokens]
         expected = [
-                'NL', 'INDENT', 'KW', 'ID', 'COLON', 'NL', 'ID', 'NL', 
-                'KW', 'ID', 'COLON', 'NL', 'ID', 'NL', 'DEDENT',
+                'NL', 'INDENT', 'ID', 'ID', 'COLON', 'NL', 'ID', 'NL',
+                'ID', 'ID', 'COLON', 'NL', 'ID', 'NL', 'DEDENT',
         ]
         self.assertEqual(token_types, expected)
 
@@ -149,7 +149,7 @@ class TestTokenize(unittest.TestCase):
         tokens = tokenize('\na\nentrypoint b:\n\tc')
         token_types = [t.type for t in tokens]
         expected = [
-                'NL', 'ID', 'NL', 'INDENT', 'KW', 'ID', 'COLON', 'NL', 'ID', 'NL', 'DEDENT',
+                'NL', 'ID', 'NL', 'INDENT', 'ID', 'ID', 'COLON', 'NL', 'ID', 'NL', 'DEDENT',
         ]
         self.assertEqual(token_types, expected)
 
@@ -157,14 +157,20 @@ class TestTokenize(unittest.TestCase):
         tokens = tokenize('\n\ta\n\t\tb\nentrypoint c:\nd')
         token_types = [t.type for t in tokens]
         expected = [
-                'NL', 'INDENT', 'ID', 'NL', 'INDENT', 'ID', 'NL', 'DEDENT', 'DEDENT', 
-                'KW', 'ID', 'COLON', 'NL', 'ID', 'NL',
+                'NL', 'INDENT', 'ID', 'NL', 'INDENT', 'ID', 'NL', 'DEDENT', 'DEDENT',
+                'ID', 'ID', 'COLON', 'NL', 'ID', 'NL',
         ]
         self.assertEqual(token_types, expected)
 
     def test_entrypoints4(self):
         with self.assertRaises(LexerError):
             tokenize('\nentrypoint e:\n')
+
+    def test_keyword_start_id(self):
+        tokens = tokenize('\nentrypoint_e:\n')
+        token_types = [t.type for t in tokens]
+        expected = ['NL', 'ID', 'COLON', 'NL']
+        self.assertEqual(token_types, expected)
 
     def test_example(self):
         src = ''' \
@@ -180,23 +186,23 @@ class TestTokenize(unittest.TestCase):
                         branch:
                             pass'''
         expected = [
-            'KW', 'ID', 'LPAREN', 'ID', 'COLON', 'TYPE', 'ASSIGN',
-                'INT', 'COMMA', 'ID', 'COLON', 'TYPE', 'ASSIGN', 'FLOAT',
+            'ID', 'ID', 'LPAREN', 'ID', 'COLON', 'ID', 'ASSIGN',
+                'INT', 'COMMA', 'ID', 'COLON', 'ID', 'ASSIGN', 'FLOAT',
                 'RPAREN', 'COLON', 'NL',
-            'INDENT', 'KW', 'ID', 'LSQUARE', 'INT', 'RSQUARE', 'KW',
+            'INDENT', 'ID', 'ID', 'LSQUARE', 'INT', 'RSQUARE', 'ID',
                 'LPAREN', 'INT', 'COMMA', 'INT', 'RPAREN', 'COLON', 'NL',
             'INDENT', 'ID', 'DOT', 'ID', 'LSQUARE', 'STRING', 'RSQUARE',
                 'ASSIGN', 'INT', 'NL',
-            'DEDENT', 'KW', 'COLON', 'NL',
-            'INDENT', 'KW', 'COLON', 'NL',
-            'INDENT', 'KW', 'COLON', 'NL',
+            'DEDENT', 'ID', 'COLON', 'NL',
+            'INDENT', 'ID', 'COLON', 'NL',
+            'INDENT', 'ID', 'COLON', 'NL',
             'INDENT', 'ID', 'DOT', 'ID', 'LSQUARE', 'STRING', 'RSQUARE',
                 'ASSIGN', 'INT', 'NL',
-            'DEDENT', 'KW', 'COLON', 'NL',
+            'DEDENT', 'ID', 'COLON', 'NL',
             'INDENT', 'ID', 'DOT', 'ID', 'LSQUARE', 'STRING', 'RSQUARE',
                 'ASSIGN', 'INT', 'NL',
-            'DEDENT', 'KW', 'COLON', 'NL',
-            'INDENT', 'KW', 'NL',
+            'DEDENT', 'ID', 'COLON', 'NL',
+            'INDENT', 'ID', 'NL',
             'DEDENT', 'DEDENT', 'DEDENT', 'DEDENT',
         ]
 
