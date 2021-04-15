@@ -439,8 +439,11 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
     # block = COLON NL INDENT block_body DEDENT
     block.define(tokop('COLON') + tokop('NL') + tokop('INDENT') + block_body + tokop('DEDENT'))
 
+    # type = INT | FLOAT | STR | BOOL
+    type_atom = tokkw('int') | tokkw('float') | tokkw('str') | tokkw('bool')
+
     # flow_param = ID COLON TYPE
-    flow_param = id_ + tokop('COLON') + (toktype('TYPE') >> type_)
+    flow_param = id_ + tokop('COLON') + type_atom >> type_
 
     # flow_params = [flow_param { COMMA flow_param }]
     flow_params = maybe(flow_param + many(tokop('COMMA') + flow_param)) >> make_array
