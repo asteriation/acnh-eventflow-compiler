@@ -458,12 +458,16 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
 
     parser = evfl_file + skip(finished)
     roots: List[RootNode] = parser.parse(seq)
+    local_roots = {r.name: r for r in roots if r.local}
+    exported_roots = {r.name: r for r in roots if not r.local}
     for n in roots:
         __collapse_connectors(n)
+    for n in roots:
+        __verify_calls(n, local_roots, exported_roots)
+    for n in roots:
         __replace_node(n, TerminalNode, None)
 
-    exported_roots = [r for r in roots if not r.local]
-    return exported_roots, list(actors.values())
+    return exported_roots.values(), list(actors.values())
 
 def __collapse_connectors(root: RootNode) -> None:
     remap: Dict[Node, Node] = {}
@@ -483,6 +487,22 @@ def __replace_node(root: Node, replace: Node, replacement: Optional[Node]) -> No
                 node.del_out_edge(replace)
             else:
                 node.reroute_out_edge(replace, replacement)
+
+def __verify_calls(root: Node, local_roots: Map[str, RootNode], exported_roots: Map[str, RootNode]) -> None:
+    reroutes = {}
+    for node in find_postorder(root):
+        if isinstance(node, SubflowNode) and node.ns == '':
+            tail_call = (len(node.out_edges) == 1 and node.out_edges[0] is TerminalNode)
+            if node.called_root_name not in exported_roots and node.called_root_name not in local_roots:
+                LOG.warning(f'{node.called_root_name} called but not defined')
+            if node.called_root_name in local_roots:
+                assert tail_call, 'non-tail-call local subflows not implemented'
+                reroutes[node] = local_roots[node.called_root_name].out_edges[0]
+            elif tail_call:
+                reroutes[node] = exported_roots[node.called_root_name].out_edges[0]
+
+    for old, new in reroutes.items():
+        __replace_node(root, old, new)
 
 def __flatten_helper(lst: Iterable[Any]) -> Generator[Any, None, None]:
     for x in lst:

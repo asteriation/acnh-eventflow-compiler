@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import unittest
 from typing import Dict, List, Set
 
@@ -227,6 +228,9 @@ class TestParser(unittest.TestCase):
         ('annotation', None),
         ('leading_comments', None),
         ('subflow', None),
+        ('subflow_tail_call', None),
+        ('local_subflow', None),
+        ('local_subflow_empty', None),
         ('switch_nonfull', None),
         ('switch_full', None),
         ('switch_nonfull_nonreturn', None),
@@ -245,6 +249,7 @@ class TestParser(unittest.TestCase):
         ('err_switch_case_empty', NoParseError),
         ('err_switch_pass', NoParseError),
         ('err_consecutive_entrypoint', NoParseError),
+        ('err_local_subflow_non_tail_call', AssertionError),
     ]
 
     TEST_DIR = 'tests/parser'
@@ -277,6 +282,7 @@ class TestParser(unittest.TestCase):
 
     def test_files(self):
         self.maxDiff = None
+        logging.basicConfig(level=logging.ERROR)
         for c, err in TestParser.CASES:
             with self.subTest(msg=f'test_{c}'):
                 with open(f'{TestParser.TEST_DIR}/{c}.evfl', 'rt') as ef:
