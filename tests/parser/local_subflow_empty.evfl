@@ -1,0 +1,6 @@
+flow Root():
+    run Local()
+
+local flow Local():
+    pass
+

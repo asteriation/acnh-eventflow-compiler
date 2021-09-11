@@ -1,0 +1,7 @@
+flow Root():
+    TestActor1.Action0()
+    run Local()
+
+local flow Local():
+    TestActor1.Action0()
+
