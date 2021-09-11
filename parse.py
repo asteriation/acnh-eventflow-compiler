@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from collections import namedtuple
 from collections.abc import Iterable
 import re
 from typing import Any, Callable, Dict, Generator, List, Optional, Sequence, Set, Tuple
 
 from funcparserlib.lexer import make_tokenizer, Token, LexerError
-from funcparserlib.parser import a, some, maybe, many, finished, skip, forward_decl
+from funcparserlib.parser import a, some, maybe, many, finished, skip, forward_decl, NoParseError, _Ignored
 from more_itertools import peekable
 
 from logger import LOG
@@ -168,24 +169,67 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
     actors: Dict[str, Actor] = {}
     actor_secondary_names, seq = process_actor_annotations(seq)
 
-    tokval = lambda x: x.value
-    toktype = lambda t: some(lambda x: x.type == t) >> tokval
+    Result = namedtuple('Result', ('value', 'start', 'end'))
+
+    def collapse_results(n, depth=9999999999):
+        if n is None:
+            return Result(None, (0, 0), (0, 0))
+        if isinstance(n, Result):
+            return n
+        if isinstance(n, Token):
+            return Result(n.value, n.start, n.end)
+        if isinstance(n, _Ignored):
+            return Result(n, n.value.start, n.value.end)
+        if isinstance(n, (tuple, list)):
+            cls = type(n)
+            if not n:
+                return Result(cls(), (0, 0), (0, 0))
+            if depth == 0:
+                _, starts, ends = zip(*(collapse_results(x) for x in n))
+                return Result(n, min(i for i in starts if i > (0, 0)), max(i for i in ends if i > (0, 0)))
+            values, starts, ends = zip(*(collapse_results(x, depth=depth-1) for x in n))
+            return Result(cls(values), min(i for i in starts if i > (0, 0)), max(i for i in ends if i > (0, 0)))
+        raise ValueError
+
+    def wrap_result(f):
+        def inner(n):
+            n = collapse_results(n)
+            r = f(n.value, n.start, n.end)
+            if isinstance(r, Result):
+                return r
+            return Result(r, n.start, n.end)
+        return inner
+
+    # def toktype(t):
+        # @wrap_result
+        # def inner(x, s, e):
+            # return x
+        # return lambda z: inner(some(lambda x: x.type == t).parse(x))
+
+    tokval = wrap_result(lambda x, s, e: x)
+    toktype = lambda t: some(lambda x: x.type == t)
     tokop = lambda typ: skip(some(lambda x: x.type == typ))
     tokkw = lambda name: skip(a(Token('ID', name)))
 
     def make_array(n):
+        r = collapse_results(n, depth=1)
+        re
         if n is None:
-            return []
+            return Result([], (0, 0), (0, 0))
         else:
-            return [x for x in [n[0]] + n[1] if x is not None]
+            return Result(
+                [x.value for x in [n[0]] + n[1] if x.value is not None],
+                min(x.start for x in [n[0]] + n[1] if x.start > (0, 0)),
+                max(x.end for x in [n[0]] + n[1] if x.end > (0, 0)),
+            )
 
-    int_ = lambda n: TypedValue(type=IntType, value=int(n))
-    float_ = lambda n: TypedValue(type=FloatType, value=float(n))
-    bool_ = lambda n: TypedValue(type=BoolType, value=(n == 'true'))
-    string = lambda n: TypedValue(type=StrType, value=n[1:-1])
-    type_ = lambda n: Type(type=n)
+    int_ = wrap_result(lambda n, s, e: TypedValue(type=IntType, value=int(n)))
+    float_ = wrap_result(lambda n, s, e: TypedValue(type=FloatType, value=float(n)))
+    bool_ = wrap_result(lambda n, s, e: TypedValue(type=BoolType, value=(n == 'true')))
+    string = wrap_result(lambda n, s, e: TypedValue(type=StrType, value=n[1:-1]))
+    type_ = wrap_result(lambda n, s, e: Type(type=n))
 
-    id_ = toktype('ID') >> str
+    id_ = toktype('ID')
 
     nid = 0
     def next_id() -> int:
@@ -193,42 +237,53 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
         rv, nid = nid, nid + 1
         return rv
 
-    def make_action(n):
-        actor_name, action_name, params = n
-        action_name = f'EventFlowAction{action_name}'
-        if actor_name not in actors:
-            actors[actor_name] = gen_actor(actor_name, actor_secondary_names.get(actor_name, ''))
-        assert action_name in actors[actor_name].actions, f'no action with name "{action_name}" found'
-
-        action = actors[actor_name].actions[action_name]
+    def assert_error(condition, error):
         try:
-            pdict = action.prepare_param_dict(params)
-        except AssertionError as e:
-            raise e # todo: better messages
+            assert condition, error
+        except AssertionError:
+            LOG.error(error)
+            raise
 
+    def check_function(actor, name, params, type_):
+        function_name = f'EventFlow{type_.capitalize()}{name}'
+        if actor not in actors:
+            actors[actor] = gen_actor(actor, actor_secondary_names.get(actor, ''))
+        mp = getattr(actors[actor], ['actions', 'queries'][type_ == 'query'])
+        assert function_name in mp, f'no {type_} with name "{function_name}" found'
+        function = mp[function_name]
+        try:
+            pdict = function.prepare_param_dict(params)
+        except AssertionError as e:
+            raise e # todo: better error messages
+        return function_name, function, pdict
+
+    @wrap_result
+    def make_action(n, start, end):
+        actor_name, action_name, params = n
+        action_name, action, pdict = check_function(actor_name, action_name, params, 'action')
         return (), (ActionNode(f'Event{next_id()}', action, pdict),)
 
-    def make_case(n):
+    @wrap_result
+    def make_case(n, start, end):
         if isinstance(n, tuple):
             return ([x.value for x in n[0]], n[1])
         return n
 
-    def make_switch(n):
+    def _get_query_num_values(query):
+        num_values = query.num_values
+        if num_values == 999999999:
+            LOG.warning(f'maximum value for {query_name} unknown; assuming 50')
+            LOG.warning(f'setting a maximum value in functions.csv may reduce generated bfevfl size')
+            num_values = 50
+        return num_values
+
+    @wrap_result
+    def make_switch(n, start, end):
         actor_name, query_name, params, branches = n
         cases = branches[0] + branches[2]
         default = branches[1]
 
-        query_name = f'EventFlowQuery{query_name}'
-        if actor_name not in actors:
-            actors[actor_name] = gen_actor(actor_name, actor_secondary_names.get(actor_name, ''))
-        assert query_name in actors[actor_name].queries, f'no query with name "{query_name}" found'
-
-        query = actors[actor_name].queries[query_name]
-        try:
-            pdict = query.prepare_param_dict(params)
-        except AssertionError as e:
-            raise e # todo: better error messages
-
+        query_name, query, pdict = check_function(actor_name, query_name, params, 'query')
         sw = SwitchNode(f'Event{next_id()}', query, pdict)
         entrypoints = []
         for values, block in cases:
@@ -241,12 +296,7 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
             for value in values:
                 sw.add_case(node, value)
 
-        num_values = query.rv.num_values()
-        if num_values == 999999999:
-            LOG.warning(f'maximum value for {query_name} unknown; assuming 50')
-            LOG.warning(f'setting a maximum value in functions.csv may reduce generated bfevfl size')
-            num_values = 50
-
+        num_values = _get_query_num_values(query)
         default_values = set(range(num_values)) - set(sum((v for v, n in cases), []))
         if default_values:
             if default is not None:
@@ -261,7 +311,8 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
 
         return entrypoints, (sw,)
 
-    def make_fork(n_):
+    @wrap_result
+    def make_fork(n_, start, end):
         for entrypoints, node, connector in n_:
             for ep in entrypoints:
                 __replace_node(ep, connector, None)
@@ -278,21 +329,26 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
 
         return eps, (fork, join)
 
-    def make_subflow_param(n):
+    @wrap_result
+    def make_subflow_param(n, start, end):
         return (n,)
 
-    def make_subflow(n):
+    @wrap_result
+    def make_subflow(n, start, end):
         ns, name, params = n
         param_dict = {k[0][0]: k[0][1] for k in params}
         return (), (SubflowNode(f'Event{next_id()}', ns or '', name, param_dict),)
 
-    def make_none(_):
+    @wrap_result
+    def make_none(_, start, end):
         return None
 
-    def make_return(_):
+    @wrap_result
+    def make_return(_, start, end):
         return (), (TerminalNode,)
 
-    def make_flow(n):
+    @wrap_result
+    def make_flow(n, start, end):
         local, name, params, body = n
         entrypoints, body_root, body_connector = body
         assert not params, 'vardefs todo'
@@ -301,7 +357,8 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
         body_connector.add_out_edge(TerminalNode)
         return list(entrypoints) + [node]
 
-    def link_ep_block(n):
+    @wrap_result
+    def link_ep_block(n, start, end):
         connector = ConnectorNode(f'Connector{next_id()}')
         ep, block_info = n
         block_info = [x for x in block_info if x is not None]
@@ -330,9 +387,10 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
 
         return (eps, block[0], connector)
 
-    def link_block(n):
+    @wrap_result
+    def link_block(n, start, end):
         connector = ConnectorNode(f'Connector{next_id()}')
-        n = make_array(n)
+        n = [n[0]] + n[1]
         eps, blocks, connectors = zip(*n)
         eps = __flatten(eps)
 
@@ -341,7 +399,8 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
 
         return (eps, blocks[0], connectors[-1])
 
-    def collect_flows(n):
+    @wrap_result
+    def collect_flows(n, start, end):
         if n is None:
             return []
         else:
@@ -371,21 +430,25 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
     actor_name = id_
     # function_name = id
     function_name = id_
-    # function = actor_name DOT action_name LPAREN function_params RPAREN
-    function = (
+    # base_function = actor_name DOT action_name LPAREN function_params RPAREN
+    base_function = (
         actor_name + tokop('DOT') + function_name +
         tokop('LPAREN') + function_params + tokop('RPAREN')
     )
+    # function = base_function | LPAREN function RPAREN
+    function = forward_decl()
+    function.define(base_function | (tokop('LPAREN') + function + tokop('RPAREN')))
+
     # simple_action = function NL
     simple_action = function + tokop('NL') >> make_action
 
     # action = simple_action (todo: converted actions)
     action = simple_action
 
-    # int_list = INT {COMMA INT} | LPAREN int_list RPAREN
+    # int_list = INT {COMMA INT} [COMMA] | LPAREN int_list RPAREN
     int_list = forward_decl()
-    int_list.define(((toktype('INT') >> int_) + many(tokop('COMMA') + (toktype('INT') >> int_)) | \
-            toktype('LPAREN') + int_list + toktype('RPAREN')) >> make_array)
+    int_list.define(((toktype('INT') >> int_) + many(tokop('COMMA') + (toktype('INT') >> int_)) + maybe(tokop('COMMA')) >> make_array) | \
+            tokop('LPAREN') + int_list + tokop('RPAREN'))
 
     # case = CASE int_list block
     case = tokkw('case') + int_list + block >> make_case
@@ -458,7 +521,7 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
     evfl_file = many(flow | (tokop('NL') >> make_none)) >> collect_flows
 
     parser = evfl_file + skip(finished)
-    roots: List[RootNode] = parser.parse(seq)
+    roots: List[RootNode] = parser.parse(seq).value
     local_roots = {r.name: r for r in roots if r.local}
     exported_roots = {r.name: r for r in roots if not r.local}
     for n in roots:
