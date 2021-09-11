@@ -200,12 +200,6 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
             return Result(r, n.start, n.end)
         return inner
 
-    # def toktype(t):
-        # @wrap_result
-        # def inner(x, s, e):
-            # return x
-        # return lambda z: inner(some(lambda x: x.type == t).parse(x))
-
     tokval = wrap_result(lambda x, s, e: x)
     toktype = lambda t: some(lambda x: x.type == t)
     tokop = lambda typ: skip(some(lambda x: x.type == typ))
