@@ -312,6 +312,114 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
         return entrypoints, (sw,)
 
     @wrap_result
+    def make_bool_function(p, start, end):
+        actor_name, query_name, params = p
+        query_name, query, pdict = check_function(actor_name, query_name, params, 'query')
+        num_values = _get_query_num_values(query)
+        if num_values > 2:
+            LOG.warning(f'call to {query_name} treated as boolean function but may not be')
+        return ((query, pdict), [({0}, query.inverted), (set(range(1, num_values)), not query.inverted)])
+
+    @wrap_result
+    def make_in(p, start, end):
+        actor_name, query_name, params, values = p
+        query_name, query, pdict = check_function(actor_name, query_name, params, 'query')
+        num_values = _get_query_num_values(query)
+        matched = set()
+        unmatched = set(range(num_values))
+        for value in values:
+            if 0 > value.value or num_values <= value.value:
+                LOG.warning(f'{value.value} never returned by {query_name}, ignored')
+                continue
+            matched.add(value.value)
+            unmatched.remove(value.value)
+        if not matched or not unmatched:
+            LOG.warning(f'always true or always false check')
+        return ((query, pdict), [(matched, True), (unmatched, False)])
+
+    @wrap_result
+    def make_cmp(p, start, end):
+        actor_name, query_name, params, op, value = p
+        query_name, query, pdict = check_function(actor_name, query_name, params, 'query')
+        num_values = _get_query_num_values(query)
+        if op == '==' or op == '!=':
+            matched = {value.value} if 0 <= value.value < num_values else set()
+            unmatched = set(i for i in range(num_values) if i != value.value)
+        elif op == '<' or op == '>=':
+            matched = set(range(min(num_values, value.value)))
+            unmatched = set(range(value.value, num_values))
+        else:
+            matched = set(range(min(num_values, value.value + 1)))
+            unmatched = set(range(value.value + 1, num_values))
+        if op in ('!=', '>=', '>'):
+            matched, unmatched = unmatched, matched
+        if not matched or not unmatched:
+            LOG.warning(f'always true or always false check')
+        return ((query, pdict), [(matched, True), (unmatched, False)])
+
+    def _predicate_replace(values, old, new):
+        for i in range(len(values)):
+            if values[i][1] == old:
+                values[i] = (values[i][0], new)
+
+    @wrap_result
+    def make_or(p, start, end):
+        left, right = p
+        # todo: can probably optimize for smaller output
+        _predicate_replace(left[1], False, right)
+        return left
+
+    @wrap_result
+    def make_and(p, start, end):
+        left, right = p
+        # todo: can probably optimize for smaller output
+        _predicate_replace(left[1], True, right)
+        return left
+
+    @wrap_result
+    def make_not(p, start, end):
+        _predicate_replace(p[1], True, None)
+        _predicate_replace(p[1], False, True)
+        _predicate_replace(p[1], None, False)
+        return p
+
+    def _expand_table(table, current, next_):
+        ((query, pdict), values) = table
+        sw = SwitchNode(f'Event{next_id()}', query, pdict)
+        for match, action in values:
+            if isinstance(action, tuple):
+                to = _expand_table(action, current, next_)
+            elif action:
+                to = current
+            else:
+                to = next_
+            for value in match:
+                sw.add_case(to, value)
+            sw.add_out_edge(to)
+        return sw
+
+    @wrap_result
+    def make_ifelse(n, start, end):
+        if_, block, elifs, else_ = n
+        cond_branches = [(if_, block)] + elifs + ([(None, else_)] if else_ else [])
+
+        entrypoints = []
+        next_ = next_connector = ConnectorNode(f'Connector{next_id()}')
+        for table, body in cond_branches[::-1]:
+            eps, node, branch_connector = body
+            entrypoints.extend(eps)
+
+            if table is None:
+                next_ = node
+                next_connector = branch_connector
+            else:
+                next_ = _expand_table(table, node, next_)
+                branch_connector.add_out_edge(next_.connector)
+                next_connector.add_out_edge(next_.connector)
+                next_connector = next_.connector
+        return entrypoints, (next_,)
+
+    @wrap_result
     def make_fork(n_, start, end):
         for entrypoints, node, connector in n_:
             for ep in entrypoints:
@@ -463,6 +571,56 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
     switch = tokkw('switch') + function + tokop('COLON') + tokop('NL') + \
             tokop('INDENT') + cases + tokop('DEDENT') >> make_switch
 
+    predicate = forward_decl()
+    predicate0 = forward_decl()
+    predicate1 = forward_decl()
+    predicate2 = forward_decl()
+
+    # bool_function = function
+    bool_function = function >> make_bool_function
+
+    # in_predicate = function IN int_list
+    in_predicate = function + tokkw('in') + int_list >> make_in
+
+    # cmp_predicate = function CMP INT
+    cmp_predicate = function + toktype('CMP') + (toktype('INT') >> int_) >> make_cmp
+
+    # not_predicate = NOT predicate0
+    not_predicate = tokkw('not') + predicate0 >> make_not
+
+    # paren_predicate = LPAREN predicate RPAREN
+    paren_predicate = tokop('LPAREN') + predicate + tokop('RPAREN')
+
+    # predicate0 = in_predicate | cmp_predicate | not_predicate | bool_function | paren_predicate
+    predicate0.define(in_predicate | cmp_predicate | not_predicate | bool_function | paren_predicate)
+
+    # and_predicate = predicate0 AND predicate1
+    and_predicate = predicate0 + tokkw('and') + predicate1 >> make_and
+
+    # predicate1 = and_predicate | predicate0
+    predicate1.define(and_predicate | predicate0)
+
+    # or_predicate = predicate1 OR predicate2
+    or_predicate = predicate1 + tokkw('or') + predicate2 >> make_or
+
+    # predicate2 = or_predicate | predicate1
+    predicate2.define(or_predicate | predicate1)
+
+    # predicate = predicate2
+    predicate.define(predicate2)
+
+    # if = IF predicate block
+    if_ = tokkw('if') + predicate + block
+
+    # elif = ELIF predicate block
+    elif_ = tokkw('elif') + predicate + block
+
+    # else = ELSE block
+    else_ = tokkw('else') + block
+
+    # ifelse = if { elif } [ else ]
+    ifelse = if_ + many(elif_) + maybe(else_) >> make_ifelse
+
     # branches = { BRANCH block }
     # branchless case handled implicitly by lack of INDENT
     branches = many(tokkw('branch') + block)
@@ -485,8 +643,8 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
         tokkw('run') + flow_name + tokop('LPAREN') + subflow_params + tokop('RPAREN') + tokop('NL')
     ) >> make_subflow
 
-    # stmt = action | switch | fork | run | pass_ | return | NL
-    stmt = action | switch | fork | run | pass_ | return_ | (tokop('NL') >> make_none)
+    # stmt = action | switch | ifelse | fork | run | pass_ | return | NL
+    stmt = action | switch | ifelse | fork | run | pass_ | return_ | (tokop('NL') >> make_none)
 
     # entrypoint = ENTRYPOINT id COLON NL
     entrypoint = tokkw('entrypoint') + id_ + tokop('COLON') + tokop('NL')
