@@ -6,6 +6,7 @@ from typing import Any, Callable, Dict, Generator, List, Optional, Sequence, Set
 
 from funcparserlib.lexer import make_tokenizer, Token, LexerError
 from funcparserlib.parser import a, some, maybe, many, finished, skip, forward_decl
+from more_itertools import peekable
 
 from logger import LOG
 from util import find_postorder
@@ -68,16 +69,14 @@ def tokenize(string: str) -> List[Token]:
     buffering = False
 
     emit_token = lambda tok: (buffered if buffering else tokens).append(tok)
-    for x in t(string):
+    gen = peekable(t(string))
+    for x in gen:
         if x.type != 'ANNOTATION':
             first_non_annotation = True
         if first_non_annotation and x.type == 'ANNOTATION':
             raise LexerError(x.start, "unexpected '@' - annotations must be at the top of the file")
 
         if x.type == 'COMMENT':
-            if tokens and tokens[-1].type == 'INDENT':
-                indent.pop()
-                tokens.pop()
             continue
         elif x.type == 'LPAREN':
             pstack.append(x)
@@ -106,7 +105,9 @@ def tokenize(string: str) -> List[Token]:
             buffering = True
         elif x.type == 'SP':
             space_since_nl = True
-            if tokens and tokens[-1].type == 'NL' and not buffering:
+            nxt = gen.peek(None)
+            next_comment = (nxt is not None and nxt.type == 'COMMENT')
+            if tokens and tokens[-1].type == 'NL' and not buffering and not next_comment:
                 indent_diff = compare_indent(indent[-1], x.name, x.start)
                 if indent_diff < 0:
                     found = False

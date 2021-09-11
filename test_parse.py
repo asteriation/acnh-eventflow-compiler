@@ -57,6 +57,14 @@ class TestTokenize(unittest.TestCase):
         ]
         self.assertEqual(token_types, expected)
 
+    def test_comment_misindent(self):
+        tokens = tokenize('\n  a\n #b\n  c\n   # d\n  e')
+        token_types = [t.type for t in tokens]
+        expected = [
+                'NL', 'INDENT', 'ID', 'NL', 'ID', 'NL', 'ID', 'NL', 'DEDENT'
+        ]
+        self.assertEqual(token_types, expected)
+
     def test_bad_indent(self):
         with self.assertRaises(LexerError):
             tokenize('\n\t\n \t')
