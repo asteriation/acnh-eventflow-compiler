@@ -30,7 +30,7 @@ def compare_version(v1: str, v2: str) -> int:
 
 def actor_gen_prepare(csvr, version: str) -> Callable[[str, str], Actor]:
     actions: List[Tuple[str, List[Param]]] = []
-    queries: List[Tuple[str, List[Param], Type]] = []
+    queries: List[Tuple[str, List[Param], Type, bool]] = []
 
     # MaxVersion, Type, Name, Parameters[, Return]
     header = next(csvr)
@@ -45,14 +45,18 @@ def actor_gen_prepare(csvr, version: str) -> Callable[[str, str], Actor]:
         if row[type_i] == 'Action':
             actions.append(('EventFlowAction' + row[name_i], params))
         else:
-            queries.append(('EventFlowQuery' + row[name_i], params, Type(row[type_i])))
+            type_ = row[return_i]
+            inverted = False
+            if type_ == 'inverted_bool':
+                type_, inverted = 'bool', True
+            queries.append(('EventFlowQuery' + row[name_i], params, Type(type_), inverted))
 
     def inner(name: str, secondary_name: str) -> Actor:
         actor = Actor(name, secondary_name)
         for aname, params in actions:
             actor.register_action(Action(name, aname, params))
-        for qname, params, rtype in queries:
-            actor.register_query(Query(name, qname, params, rtype, True))
+        for qname, params, rtype, inverted in queries:
+            actor.register_query(Query(name, qname, params, rtype, inverted))
         return actor
 
     return inner
