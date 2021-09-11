@@ -58,23 +58,37 @@ def _next_diff(s1: str, s2: str, start: int) -> int:
 class _PTrieNode:
     def __init__(self, name: str, cmp_name: str, min_index: int) -> None:
         self.name = name
+        self.min_index = min_index
         self.index = _next_diff(cmp_name, name, min_index)
         self.branches: List[Optional[_PTrieNode]] = [None, None]
         self.branches[_get_bit(self.name, self.index)] = self
 
-    def insert(self, s: str) -> _PTrieNode:
+    def insert(self, s: str) -> Tuple[_PTrieNode, bool]:
+        if s == self.name:
+            raise ValueError(f'`{s}` already in trie')
+        diff = _next_diff(s, self.name, self.min_index)
+        if diff < self.index:
+            node = _PTrieNode(s, self.name, self.min_index)
+            node.branches[_get_bit(self.name, diff)] = self
+            self.min_index = diff + 1
+            return node, True
         check = _get_bit(s, self.index)
         branch = self.branches[check]
         if branch is None:
-            node = _PTrieNode(s, '', self.index + 1)
+            self.branches[check] = node = _PTrieNode(s, '', self.index + 1)
         elif branch.index <= self.index:
-            node = _PTrieNode(s, branch.name, self.index + 1)
+            self.branches[check] = node = _PTrieNode(s, branch.name, self.index + 1)
             node.branches[_get_bit(branch.name, node.index)] = branch
         else:
-            return branch.insert(s)
+            node, replace_branch = branch.insert(s)
+            if replace_branch:
+                self.branches[check] = node
 
-        self.branches[check] = node
-        return node
+        return node, False
+
+    def __str__(self):
+        branches = ', '.join(b.name if b else 'None' for b in self.branches)
+        return f'_PTrieNode[name={self.name}, index={self.index}, branches=[{branches}]'
 
 def _compute_indices(strings: List[str]) -> List[Tuple[int, int, int]]:
     if not strings:
@@ -83,14 +97,9 @@ def _compute_indices(strings: List[str]) -> List[Tuple[int, int, int]]:
     root = 0
     nodes = [_PTrieNode(strings[0], '', 0)]
     for i, s in enumerate(strings[1:]):
-        diff = _next_diff(nodes[root].name, s, 0)
-        if diff < nodes[root].index:
-            node = _PTrieNode(s, nodes[root].name, 0)
-            node.branches[_get_bit(nodes[root].name, node.index)] = nodes[root]
-            root = i + 1
-        else:
-            node = nodes[root].insert(s)
-
+        node, replace_root = nodes[root].insert(s)
+        if replace_root:
+            root = len(nodes)
         nodes.append(node)
 
     stoi = {s: i + 1 for i, s in enumerate(strings)}
