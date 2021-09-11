@@ -467,7 +467,7 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
     for n in roots:
         __replace_node(n, TerminalNode, None)
 
-    return exported_roots.values(), list(actors.values())
+    return list(exported_roots.values()), list(actors.values())
 
 def __collapse_connectors(root: RootNode) -> None:
     remap: Dict[Node, Node] = {}
@@ -488,7 +488,7 @@ def __replace_node(root: Node, replace: Node, replacement: Optional[Node]) -> No
             else:
                 node.reroute_out_edge(replace, replacement)
 
-def __verify_calls(root: Node, local_roots: Map[str, RootNode], exported_roots: Map[str, RootNode]) -> None:
+def __verify_calls(root: Node, local_roots: Dict[str, RootNode], exported_roots: Dict[str, RootNode]) -> None:
     reroutes = {}
     for node in find_postorder(root):
         if isinstance(node, SubflowNode) and node.ns == '':
