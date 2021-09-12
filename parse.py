@@ -17,7 +17,7 @@ from bfevfl.actors import Param, Action, Actor
 from bfevfl.nodes import (Node, RootNode, ActionNode, SwitchNode, JoinNode, ForkNode,
         SubflowNode, TerminalNode, ConnectorNode)
 
-def compare_indent(base: str, new: str, pos: Tuple[int, int]) -> int:
+def __compare_indent(base: str, new: str, pos: Tuple[int, int]) -> int:
     if base.startswith(new):
         return -1 if len(base) > len(new) else 0
     elif new.startswith(base):
@@ -109,7 +109,7 @@ def tokenize(string: str) -> List[Token]:
             nxt = gen.peek(None)
             next_comment = (nxt is not None and nxt.type == 'COMMENT')
             if tokens and tokens[-1].type == 'NL' and not buffering and not next_comment:
-                indent_diff = compare_indent(indent[-1], x.name, x.start)
+                indent_diff = __compare_indent(indent[-1], x.name, x.start)
                 if indent_diff < 0:
                     found = False
                     while indent:
@@ -156,7 +156,7 @@ def tokenize(string: str) -> List[Token]:
 
     return tokens
 
-def process_actor_annotations(seq: List[Token]) -> Tuple[Dict[str, str], List[Token]]:
+def __process_actor_annotations(seq: List[Token]) -> Tuple[Dict[str, str], List[Token]]:
     i = 0
     rv: Dict[str, str] = {}
     while i < len(seq) and seq[i].type == 'ANNOTATION':
@@ -165,63 +165,108 @@ def process_actor_annotations(seq: List[Token]) -> Tuple[Dict[str, str], List[To
         i += 1
     return rv, seq[i:]
 
+__Result = namedtuple('__Result', ('value', 'start', 'end'))
+
+def __collapse_results(n, depth=9999999999):
+    if n is None:
+        return __Result(None, (0, 0), (0, 0))
+    if isinstance(n, __Result):
+        return n
+    if isinstance(n, Token):
+        return __Result(n.value, n.start, n.end)
+    if isinstance(n, _Ignored):
+        return __Result(n, n.value.start, n.value.end)
+    if isinstance(n, (tuple, list)):
+        cls = type(n)
+        if not n:
+            return __Result(cls(), (0, 0), (0, 0))
+        if depth == 0:
+            _, starts, ends = zip(*(__collapse_results(x) for x in n))
+            return __Result(n, min(i for i in starts if i > (0, 0)), max(i for i in ends if i > (0, 0)))
+        values, starts, ends = zip(*(__collapse_results(x, depth=depth-1) for x in n))
+        return __Result(cls(values), min(i for i in starts if i > (0, 0)), max(i for i in ends if i > (0, 0)))
+    raise ValueError
+
+def __wrap_result(f):
+    def inner(n):
+        n = __collapse_results(n)
+        r = f(n.value, n.start, n.end)
+        if isinstance(r, __Result):
+            return r
+        return __Result(r, n.start, n.end)
+    return inner
+
+def __collapse_connectors(root: RootNode) -> None:
+    remap: Dict[Node, Node] = {}
+
+    for node in find_postorder(root):
+        for onode in node.out_edges:
+            if onode in remap:
+                node.reroute_out_edge(onode, remap[onode])
+        if isinstance(node, ConnectorNode):
+            assert len(node.out_edges) == 1
+            remap[node] = node.out_edges[0]
+
+def __replace_node(root: Node, replace: Node, replacement: Optional[Node]) -> None:
+    for node in find_postorder(root):
+        if replace in node.out_edges:
+            if replacement is None:
+                node.del_out_edge(replace)
+            else:
+                node.reroute_out_edge(replace, replacement)
+
+def __verify_calls(root: Node, local_roots: Dict[str, RootNode], exported_roots: Dict[str, RootNode]) -> None:
+    reroutes = {}
+    for node in find_postorder(root):
+        if isinstance(node, SubflowNode) and node.ns == '':
+            tail_call = (len(node.out_edges) == 1 and node.out_edges[0] is TerminalNode)
+            if node.called_root_name not in exported_roots and node.called_root_name not in local_roots:
+                emit_warning(f'{node.called_root_name} called but not defined')
+            if node.called_root_name in local_roots:
+                assert tail_call, 'non-tail-call local subflows not implemented'
+                reroutes[node] = local_roots[node.called_root_name].out_edges[0]
+            elif tail_call:
+                reroutes[node] = exported_roots[node.called_root_name].out_edges[0]
+
+    for old, new in reroutes.items():
+        __replace_node(root, old, new)
+
+def __flatten_helper(lst: Iterable[Any]) -> Generator[Any, None, None]:
+    for x in lst:
+        if isinstance(x, Iterable):
+            yield from __flatten_helper(x)
+        else:
+            yield x
+
+def __flatten(lst: Sequence[Any]) -> List[Any]:
+    return list(__flatten_helper(lst))
+
 def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[List[RootNode], List[Actor]]:
     actors: Dict[str, Actor] = {}
-    actor_secondary_names, seq = process_actor_annotations(seq)
+    actor_secondary_names, seq = __process_actor_annotations(seq)
 
-    Result = namedtuple('Result', ('value', 'start', 'end'))
-
-    def collapse_results(n, depth=9999999999):
-        if n is None:
-            return Result(None, (0, 0), (0, 0))
-        if isinstance(n, Result):
-            return n
-        if isinstance(n, Token):
-            return Result(n.value, n.start, n.end)
-        if isinstance(n, _Ignored):
-            return Result(n, n.value.start, n.value.end)
-        if isinstance(n, (tuple, list)):
-            cls = type(n)
-            if not n:
-                return Result(cls(), (0, 0), (0, 0))
-            if depth == 0:
-                _, starts, ends = zip(*(collapse_results(x) for x in n))
-                return Result(n, min(i for i in starts if i > (0, 0)), max(i for i in ends if i > (0, 0)))
-            values, starts, ends = zip(*(collapse_results(x, depth=depth-1) for x in n))
-            return Result(cls(values), min(i for i in starts if i > (0, 0)), max(i for i in ends if i > (0, 0)))
-        raise ValueError
-
-    def wrap_result(f):
-        def inner(n):
-            n = collapse_results(n)
-            r = f(n.value, n.start, n.end)
-            if isinstance(r, Result):
-                return r
-            return Result(r, n.start, n.end)
-        return inner
-
-    tokval = wrap_result(lambda x, s, e: x)
+    tokval = __wrap_result(lambda x, s, e: x)
     toktype = lambda t: some(lambda x: x.type == t)
     tokop = lambda typ: skip(some(lambda x: x.type == typ))
     tokkw = lambda name: skip(a(Token('ID', name)))
 
     def make_array(n):
-        r = collapse_results(n, depth=1)
+        r = __collapse_results(n, depth=1)
         re
         if n is None:
-            return Result([], (0, 0), (0, 0))
+            return __Result([], (0, 0), (0, 0))
         else:
-            return Result(
+            return __Result(
                 [x.value for x in [n[0]] + n[1] if x.value is not None],
                 min(x.start for x in [n[0]] + n[1] if x.start > (0, 0)),
                 max(x.end for x in [n[0]] + n[1] if x.end > (0, 0)),
             )
 
-    int_ = wrap_result(lambda n, s, e: TypedValue(type=IntType, value=int(n)))
-    float_ = wrap_result(lambda n, s, e: TypedValue(type=FloatType, value=float(n)))
-    bool_ = wrap_result(lambda n, s, e: TypedValue(type=BoolType, value=(n == 'true')))
-    string = wrap_result(lambda n, s, e: TypedValue(type=StrType, value=n[1:-1]))
-    type_ = wrap_result(lambda n, s, e: Type(type=n))
+    int_ = __wrap_result(lambda n, s, e: TypedValue(type=IntType, value=int(n)))
+    float_ = __wrap_result(lambda n, s, e: TypedValue(type=FloatType, value=float(n)))
+    bool_ = __wrap_result(lambda n, s, e: TypedValue(type=BoolType, value=(n == 'true')))
+    string = __wrap_result(lambda n, s, e: TypedValue(type=StrType, value=n[1:-1]))
+    type_ = __wrap_result(lambda n, s, e: Type(type=n))
 
     id_ = toktype('ID')
 
@@ -244,13 +289,13 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
             raise e # todo: better error messages
         return function_name, function, pdict
 
-    @wrap_result
+    @__wrap_result
     def make_action(n, start, end):
         actor_name, action_name, params = n
         action_name, action, pdict = check_function(actor_name, action_name, params, 'action')
         return (), (ActionNode(f'Event{next_id()}', action, pdict),)
 
-    @wrap_result
+    @__wrap_result
     def make_case(n, start, end):
         if isinstance(n, tuple):
             return ([x.value for x in n[0]], n[1])
@@ -264,7 +309,7 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
             num_values = 50
         return num_values
 
-    @wrap_result
+    @__wrap_result
     def make_switch(n, start, end):
         actor_name, query_name, params, branches = n
         cases = branches[0] + branches[2]
@@ -298,7 +343,7 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
 
         return entrypoints, (sw,)
 
-    @wrap_result
+    @__wrap_result
     def make_bool_function(p, start, end):
         actor_name, query_name, params = p
         query_name, query, pdict = check_function(actor_name, query_name, params, 'query')
@@ -307,7 +352,7 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
             emit_warning(f'call to {query_name} treated as boolean function but may not be', start, end)
         return ((query, pdict), [({0}, query.inverted), (set(range(1, num_values)), not query.inverted)])
 
-    @wrap_result
+    @__wrap_result
     def make_in(p, start, end):
         actor_name, query_name, params, values = p
         query_name, query, pdict = check_function(actor_name, query_name, params, 'query')
@@ -324,7 +369,7 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
             emit_warning(f'always true or always false check', start, end)
         return ((query, pdict), [(matched, True), (unmatched, False)])
 
-    @wrap_result
+    @__wrap_result
     def make_cmp(p, start, end):
         actor_name, query_name, params, op, value = p
         query_name, query, pdict = check_function(actor_name, query_name, params, 'query')
@@ -349,21 +394,21 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
             if values[i][1] == old:
                 values[i] = (values[i][0], new)
 
-    @wrap_result
+    @__wrap_result
     def make_or(p, start, end):
         left, right = p
         # todo: can probably optimize for smaller output
         _predicate_replace(left[1], False, right)
         return left
 
-    @wrap_result
+    @__wrap_result
     def make_and(p, start, end):
         left, right = p
         # todo: can probably optimize for smaller output
         _predicate_replace(left[1], True, right)
         return left
 
-    @wrap_result
+    @__wrap_result
     def make_not(p, start, end):
         _predicate_replace(p[1], True, None)
         _predicate_replace(p[1], False, True)
@@ -385,7 +430,7 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
             sw.add_out_edge(to)
         return sw
 
-    @wrap_result
+    @__wrap_result
     def make_ifelse(n, start, end):
         if_, block, elifs, else_ = n
         cond_branches = [(if_, block)] + elifs + ([(None, else_)] if else_ else [])
@@ -406,7 +451,7 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
                 next_connector = next_.connector
         return entrypoints, (next_,)
 
-    @wrap_result
+    @__wrap_result
     def make_fork(n_, start, end):
         for entrypoints, node, connector in n_:
             for ep in entrypoints:
@@ -424,25 +469,25 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
 
         return eps, (fork, join)
 
-    @wrap_result
+    @__wrap_result
     def make_subflow_param(n, start, end):
         return (n,)
 
-    @wrap_result
+    @__wrap_result
     def make_subflow(n, start, end):
         ns, name, params = n
         param_dict = {k[0][0]: k[0][1] for k in params}
         return (), (SubflowNode(f'Event{next_id()}', ns or '', name, param_dict),)
 
-    @wrap_result
+    @__wrap_result
     def make_none(_, start, end):
         return None
 
-    @wrap_result
+    @__wrap_result
     def make_return(_, start, end):
         return (), (TerminalNode,)
 
-    @wrap_result
+    @__wrap_result
     def make_flow(n, start, end):
         local, name, params, body = n
         entrypoints, body_root, body_connector = body
@@ -452,7 +497,7 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
         body_connector.add_out_edge(TerminalNode)
         return list(entrypoints) + [node]
 
-    @wrap_result
+    @__wrap_result
     def link_ep_block(n, start, end):
         connector = ConnectorNode(f'Connector{next_id()}')
         ep, block_info = n
@@ -482,7 +527,7 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
 
         return (eps, block[0], connector)
 
-    @wrap_result
+    @__wrap_result
     def link_block(n, start, end):
         connector = ConnectorNode(f'Connector{next_id()}')
         n = [n[0]] + n[1]
@@ -494,7 +539,7 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
 
         return (eps, blocks[0], connectors[-1])
 
-    @wrap_result
+    @__wrap_result
     def collect_flows(n, start, end):
         if n is None:
             return []
@@ -677,48 +722,3 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
         __replace_node(n, TerminalNode, None)
 
     return list(exported_roots.values()), list(actors.values())
-
-def __collapse_connectors(root: RootNode) -> None:
-    remap: Dict[Node, Node] = {}
-
-    for node in find_postorder(root):
-        for onode in node.out_edges:
-            if onode in remap:
-                node.reroute_out_edge(onode, remap[onode])
-        if isinstance(node, ConnectorNode):
-            assert len(node.out_edges) == 1
-            remap[node] = node.out_edges[0]
-
-def __replace_node(root: Node, replace: Node, replacement: Optional[Node]) -> None:
-    for node in find_postorder(root):
-        if replace in node.out_edges:
-            if replacement is None:
-                node.del_out_edge(replace)
-            else:
-                node.reroute_out_edge(replace, replacement)
-
-def __verify_calls(root: Node, local_roots: Dict[str, RootNode], exported_roots: Dict[str, RootNode]) -> None:
-    reroutes = {}
-    for node in find_postorder(root):
-        if isinstance(node, SubflowNode) and node.ns == '':
-            tail_call = (len(node.out_edges) == 1 and node.out_edges[0] is TerminalNode)
-            if node.called_root_name not in exported_roots and node.called_root_name not in local_roots:
-                emit_warning(f'{node.called_root_name} called but not defined')
-            if node.called_root_name in local_roots:
-                assert tail_call, 'non-tail-call local subflows not implemented'
-                reroutes[node] = local_roots[node.called_root_name].out_edges[0]
-            elif tail_call:
-                reroutes[node] = exported_roots[node.called_root_name].out_edges[0]
-
-    for old, new in reroutes.items():
-        __replace_node(root, old, new)
-
-def __flatten_helper(lst: Iterable[Any]) -> Generator[Any, None, None]:
-    for x in lst:
-        if isinstance(x, Iterable):
-            yield from __flatten_helper(x)
-        else:
-            yield x
-
-def __flatten(lst: Sequence[Any]) -> List[Any]:
-    return list(__flatten_helper(lst))
