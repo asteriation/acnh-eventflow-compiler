@@ -9,7 +9,7 @@ from funcparserlib.lexer import make_tokenizer, Token, LexerError
 from funcparserlib.parser import a, some, maybe, many, finished, skip, forward_decl, NoParseError, _Ignored
 from more_itertools import peekable
 
-from logger import LOG
+from logger import emit_warning
 from util import find_postorder
 
 from bfevfl.datatype import BoolType, FloatType, IntType, StrType, Type, TypedValue
@@ -231,13 +231,6 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
         rv, nid = nid, nid + 1
         return rv
 
-    def assert_error(condition, error):
-        try:
-            assert condition, error
-        except AssertionError:
-            LOG.error(error)
-            raise
-
     def check_function(actor, name, params, type_):
         function_name = f'EventFlow{type_.capitalize()}{name}'
         if actor not in actors:
@@ -263,11 +256,11 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
             return ([x.value for x in n[0]], n[1])
         return n
 
-    def _get_query_num_values(query):
+    def _get_query_num_values(query, start, end):
         num_values = query.num_values
         if num_values == 999999999:
-            LOG.warning(f'maximum value for {query_name} unknown; assuming 50')
-            LOG.warning(f'setting a maximum value in functions.csv may reduce generated bfevfl size')
+            emit_warning(f'maximum value for {query.name} unknown; assuming 50', start, end, print_source=False)
+            emit_warning(f'setting a maximum value in functions.csv may reduce generated bfevfl size', start, end)
             num_values = 50
         return num_values
 
@@ -290,7 +283,7 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
             for value in values:
                 sw.add_case(node, value)
 
-        num_values = _get_query_num_values(query)
+        num_values = _get_query_num_values(query, start, end)
         default_values = set(range(num_values)) - set(sum((v for v, n in cases), []))
         if default_values:
             if default is not None:
@@ -301,7 +294,7 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
             for value in default_values:
                 sw.add_case(default_branch, value)
         elif default:
-            LOG.warning(f'default branch for {query_name} call is dead code, ignoring')
+            emit_warning(f'default branch for {query_name} call is dead code, ignoring', start, end)
 
         return entrypoints, (sw,)
 
@@ -309,33 +302,33 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
     def make_bool_function(p, start, end):
         actor_name, query_name, params = p
         query_name, query, pdict = check_function(actor_name, query_name, params, 'query')
-        num_values = _get_query_num_values(query)
+        num_values = _get_query_num_values(query, start, end)
         if num_values > 2:
-            LOG.warning(f'call to {query_name} treated as boolean function but may not be')
+            emit_warning(f'call to {query_name} treated as boolean function but may not be', start, end)
         return ((query, pdict), [({0}, query.inverted), (set(range(1, num_values)), not query.inverted)])
 
     @wrap_result
     def make_in(p, start, end):
         actor_name, query_name, params, values = p
         query_name, query, pdict = check_function(actor_name, query_name, params, 'query')
-        num_values = _get_query_num_values(query)
+        num_values = _get_query_num_values(query, start, end)
         matched = set()
         unmatched = set(range(num_values))
         for value in values:
             if 0 > value.value or num_values <= value.value:
-                LOG.warning(f'{value.value} never returned by {query_name}, ignored')
+                emit_warning('{value.value} never returned by {query_name}, ignored', start, end)
                 continue
             matched.add(value.value)
             unmatched.remove(value.value)
         if not matched or not unmatched:
-            LOG.warning(f'always true or always false check')
+            emit_warning(f'always true or always false check', start, end)
         return ((query, pdict), [(matched, True), (unmatched, False)])
 
     @wrap_result
     def make_cmp(p, start, end):
         actor_name, query_name, params, op, value = p
         query_name, query, pdict = check_function(actor_name, query_name, params, 'query')
-        num_values = _get_query_num_values(query)
+        num_values = _get_query_num_values(query, start, end)
         if op == '==' or op == '!=':
             matched = {value.value} if 0 <= value.value < num_values else set()
             unmatched = set(i for i in range(num_values) if i != value.value)
@@ -348,7 +341,7 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
         if op in ('!=', '>=', '>'):
             matched, unmatched = unmatched, matched
         if not matched or not unmatched:
-            LOG.warning(f'always true or always false check')
+            emit_warning(f'always true or always false check', start, end)
         return ((query, pdict), [(matched, True), (unmatched, False)])
 
     def _predicate_replace(values, old, new):
@@ -710,7 +703,7 @@ def __verify_calls(root: Node, local_roots: Dict[str, RootNode], exported_roots:
         if isinstance(node, SubflowNode) and node.ns == '':
             tail_call = (len(node.out_edges) == 1 and node.out_edges[0] is TerminalNode)
             if node.called_root_name not in exported_roots and node.called_root_name not in local_roots:
-                LOG.warning(f'{node.called_root_name} called but not defined')
+                emit_warning(f'{node.called_root_name} called but not defined')
             if node.called_root_name in local_roots:
                 assert tail_call, 'non-tail-call local subflows not implemented'
                 reroutes[node] = local_roots[node.called_root_name].out_edges[0]

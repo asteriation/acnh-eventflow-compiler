@@ -13,6 +13,7 @@ from bfevfl.file import File
 
 from parse import tokenize, parse
 from util import find_postorder
+from logger import init_logger, setup_logger, emit_error, emit_fatal
 
 def param_str_to_param(pstr: str) -> Param:
     name, type_ = pstr.split(':')
@@ -61,6 +62,45 @@ def actor_gen_prepare(csvr, version: str) -> Callable[[str, str], Actor]:
 
     return inner
 
+def process_file(filename):
+    init_logger(filename)
+
+    if_ = Path(filename)
+    of = output_dir / output_name if output_name else output_dir / if_.with_suffix('.bfevfl').name
+    name = if_.with_suffix('').name
+    if not if_.exists():
+        emit_error('file not found, skipping')
+        return False
+
+    with if_.open('rt') as f:
+        evfl = f.read()
+        setup_logger(evfl)
+
+    tokens = tokenize(evfl)
+    roots, actors = parse(tokens, actor_gen)
+    nodes: Set[Node] = set()
+    entrypoints = set(r.name for r in roots)
+    for root in roots:
+        for node in find_postorder(root):
+            if node in nodes:
+                continue
+            if isinstance(node, ActionNode):
+                node.action.mark_used()
+            elif isinstance(node, SwitchNode):
+                node.query.mark_used()
+            elif isinstance(node, SubflowNode):
+                if node.ns == '' and node.called_root_name not in entrypoints:
+                    emit_error(f'subflow call for {node.called_root_name} but matching flow/entrypoint not found')
+                    return False
+
+            nodes.add(node)
+
+    bfevfl = File(name, actors, list(nodes))
+    with of.open('wb') as f:
+        f.write(bfevfl.prepare_bitstream().bytes)
+
+    return True
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-f', metavar='functions.csv', default='functions.csv',
@@ -73,12 +113,12 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if len(args.files) > 1 and args.o:
-        print('-o cannot be used with multiple input files', file=sys.stderr)
+        emit_fatal('-o cannot be used with multiple input files')
         sys.exit(1)
 
     fcsv = Path(args.f)
     if not fcsv.exists() or not fcsv.is_file():
-        print(f'cannot open {args.f}', file=sys.stderr)
+        emit_fatal(f'cannot open {args.f}')
         sys.exit(1)
     with fcsv.open('rt') as f:
         actor_gen = actor_gen_prepare(csv.reader(f), args.v)
@@ -90,43 +130,13 @@ if __name__ == '__main__':
         if not output_dir.exists():
             output_dir.mkdir()
         if output_dir.is_file():
-            print('output directory is a file', file=sys.stderr)
+            emit_fatal('output directory is a file')
             sys.exit(1)
     if args.o:
         output_name = args.o
 
+    success = True
     for filename in args.files:
-        if_ = Path(filename)
-        of = output_dir / output_name if output_name else output_dir / if_.with_suffix('.bfevfl').name
-        name = if_.with_suffix('').name
-        if not if_.exists():
-            print(f'file {filename} not found, skipping', file=sys.stderr)
-            continue
-
-        with if_.open('rt') as f:
-            evfl = f.read()
-
-        tokens = tokenize(evfl)
-        roots, actors = parse(tokens, actor_gen)
-
-        nodes: Set[Node] = set()
-        entrypoints = set(r.name for r in roots)
-        for root in roots:
-            for node in find_postorder(root):
-                if node in nodes:
-                    continue
-                if isinstance(node, ActionNode):
-                    node.action.mark_used()
-                elif isinstance(node, SwitchNode):
-                    node.query.mark_used()
-                elif isinstance(node, SubflowNode):
-                    if node.ns == '' and node.called_root_name not in entrypoints:
-                        print(f'subflow call for {node.called_root_name} but matching flow/entrypoint not found')
-                        sys.exit(2)
-
-                nodes.add(node)
-
-        bfevfl = File(name, actors, list(nodes))
-        with of.open('wb') as f:
-            f.write(bfevfl.prepare_bitstream().bytes)
-
+        success = process_file(filename) and success
+    if not success:
+        sys.exit(1)
