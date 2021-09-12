@@ -156,6 +156,7 @@ if __name__ == '__main__':
             except LogError:
                 success = False
             except NoParseError as e:
+                success = False
                 pos, msg = e.msg.split(':', 1)
                 start, end = pos.split('-', 1)
                 start = tuple(int(x) for x in start.split(',', 1))
