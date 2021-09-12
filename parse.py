@@ -3,13 +3,13 @@ from __future__ import annotations
 from collections import namedtuple
 from collections.abc import Iterable
 import re
-from typing import Any, Callable, Dict, Generator, List, Optional, Sequence, Set, Tuple
+from typing import Any, Callable, Dict, Generator, List, Optional, Sequence, Set, Tuple, NoReturn
 
 from funcparserlib.lexer import make_tokenizer, Token, LexerError
-from funcparserlib.parser import a, some, maybe, many, finished, skip, forward_decl, NoParseError, _Ignored
+from funcparserlib.parser import a, some, maybe, many, finished, skip, forward_decl, NoParseError, _Ignored, Parser
 from more_itertools import peekable
 
-from logger import emit_warning
+from logger import emit_info, emit_warning, emit_fatal, LogFatal
 from util import find_postorder
 
 from bfevfl.datatype import BoolType, FloatType, IntType, StrType, Type, TypedValue
@@ -24,38 +24,38 @@ def __compare_indent(base: str, new: str, pos: Tuple[int, int]) -> int:
         return 1
     raise LexerError(pos, f'mixed tab/space indent')
 
-def tokenize(string: str) -> List[Token]:
-    specs = [
-        ('ANNOTATION', (r'@[^\r\n]*\r?\n',)),
-        ('COMMENT', (r'#[^\r\n]*',)),
-        ('SP', (r'[ \t]+',)),
-        ('NL', (r'[\r\n]+',)),
-        ('COLON', (r':',)),
-        ('LPAREN', (r'\(',)),
-        ('RPAREN', (r'\)',)),
-        ('LSQUARE', (r'\[',)),
-        ('RSQUARE', (r'\]',)),
-        ('CMP', (r'[!=]=|[<>]=?',)),
-        ('ASSIGN', (r'=',)),
-        ('PASSIGN', (r'\+=',)),
-        ('DOT', (r'\.',)),
-        ('COMMA', (r',',)),
-        ('ID', (r'''
-            [A-Za-z]
-                (?:
-                    [A-Za-z0-9_\-]*[A-Za-z0-9]
-                  | [A-Za-z0-9]*)
-          | \d+
-                (?:
-                    [A-Za-z_\-][A-Za-z0-9_\-]*[A-Za-z0-9]
-                  | [A-Za-z][A-Za-z0-9]*)
-            ''', re.VERBOSE)),
-        ('FLOAT', (r'[+-]?[ \t]*(?:\d+\.\d*|\d*\.\d+)',)), # todo: fix this
-        ('INT', (r'[+-]?[ \t]*\d+',)), # todo: hex
-        ('STRING', (r'"(?:\\\.|[^"\\])*"|\'(?:\\\.|[^\'\\])*\'',)),
-    ]
+__tokens = [
+    ('ANNOTATION', (r'@[^\r\n]*\r?\n',)),
+    ('COMMENT', (r'#[^\r\n]*',)),
+    ('SP', (r'[ \t]+',)),
+    ('NL', (r'[\r\n]+',)),
+    ('COLON', (r':',)),
+    ('LPAREN', (r'\(',)),
+    ('RPAREN', (r'\)',)),
+    ('LSQUARE', (r'\[',)),
+    ('RSQUARE', (r'\]',)),
+    ('CMP', (r'[!=]=|[<>]=?',)),
+    ('ASSIGN', (r'=',)),
+    ('PASSIGN', (r'\+=',)),
+    ('DOT', (r'\.',)),
+    ('COMMA', (r',',)),
+    ('ID', (r'''
+        [A-Za-z]
+            (?:
+                [A-Za-z0-9_\-]*[A-Za-z0-9]
+                | [A-Za-z0-9]*)
+        | \d+
+            (?:
+                [A-Za-z_\-][A-Za-z0-9_\-]*[A-Za-z0-9]
+                | [A-Za-z][A-Za-z0-9]*)
+        ''', re.VERBOSE)),
+    ('FLOAT', (r'[+-]?[ \t]*(?:\d+\.\d*|\d*\.\d+)',)), # todo: fix this
+    ('INT', (r'[+-]?[ \t]*\d+',)), # todo: hex
+    ('STRING', (r'"(?:\\\.|[^"\\])*"|\'(?:\\\.|[^\'\\])*\'',)),
+]
 
-    t = make_tokenizer(specs)
+def tokenize(string: str) -> List[Token]:
+    t = make_tokenizer(__tokens)
     pstack: List[Token] = []
     indent = ['']
 
@@ -240,35 +240,142 @@ def __flatten_helper(lst: Iterable[Any]) -> Generator[Any, None, None]:
 
 def __flatten(lst: Sequence[Any]) -> List[Any]:
     return list(__flatten_helper(lst))
+    
+__toktype = lambda t: some(lambda x: x.type == t)
+__tokop = lambda typ: skip(some(lambda x: x.type == typ))
+__tokkw = lambda name: skip(a(Token('ID', name)))
+__identity = __wrap_result(lambda n, s, e: n)
 
-def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[List[RootNode], List[Actor]]:
+def __make_array(n):
+    r = __collapse_results(n, depth=1)
+    re
+    if n is None:
+        return __Result([], (0, 0), (0, 0))
+    else:
+        return __Result(
+            [x.value for x in [n[0]] + n[1] if x.value is not None],
+            min(x.start for x in [n[0]] + n[1] if x.start > (0, 0)),
+            max(x.end for x in [n[0]] + n[1] if x.end > (0, 0)),
+        )
+
+__int = __wrap_result(lambda n, s, e: TypedValue(type=IntType, value=int(n)))
+__float = __wrap_result(lambda n, s, e: TypedValue(type=FloatType, value=float(n)))
+__bool = __wrap_result(lambda n, s, e: TypedValue(type=BoolType, value=(n == 'true')))
+__string = __wrap_result(lambda n, s, e: TypedValue(type=StrType, value=n[1:-1]))
+__type = __wrap_result(lambda n, s, e: Type(type=n))
+
+id_ = __toktype('ID')
+
+def __parse_custom_rule(name: str, s: str) -> Tuple[int, Parser]:
+    rules = [x.strip() for x in s.split('\n') if x.strip()]
+    out = []
+    r = re.compile(r'^([A-Z]+)\s*\(\s*(?:(".*")|([^=]+)\s*(?:\=\s*(.+))?|)\s*\)$')
+    valid_token_types = set(t for t, m in __tokens)
+
+    def exit_bad_rule(message) -> NoReturn:
+        emit_fatal(message)
+        for r in rules:
+            emit_info(r)
+            if r == rule:
+                emit_info('^' * len(r))
+        raise LogFatal()
+
+    actor_set = False
+    params = {'.name': name, '.negated': False}
+
+    def eval_(s):
+        __int = lambda n: TypedValue(type=IntType, value=int(n))
+        __float = lambda n: TypedValue(type=FloatType, value=float(n))
+        __bool = lambda n: TypedValue(type=BoolType, value=(n == 'true'))
+        __string = lambda n: TypedValue(type=StrType, value=n[1:-1])
+        return eval(s, locals())
+
+    def make_parser(type_ ,value, param, parse):
+        nonlocal actor_set
+        if type_ not in valid_token_types and type_ != 'NULL':
+            exit_bad_rule(f'"{type_}" is not a valid token type')
+        if param == '.actor':
+            actor_set = True
+        if type_ == 'NULL':
+            if value:
+                exit_bad_rule("NULL token cannot be used with value check")
+        if value:
+            try:
+                value = eval_(value)
+            except:
+                exit_bad_rule("Failed to parse custom rule value check")
+            out.append(skip(a(Token(type_, value))))
+        elif not param:
+            out.append(skip(some(lambda x: x.type == type_)))
+        else:
+            parse = parse or '__value'
+            try:
+                f = eval_(f'lambda __type, __value: {parse}')
+            except:
+                exit_bad_rule("Failed to parse custom rule")
+
+            if type_ == 'NULL':
+                params[param] = f(None, None)
+                return
+
+            @__wrap_result
+            def inner(t, start, end):
+                return {param: f(type_, t)}
+            
+            value_wrapper = {
+                'INT': __int,
+                'FLOAT': __float,
+                'BOOL': __bool,
+                'STRING': __string,
+                'ID': __string,
+            }.get(type_, __identity)
+            if param[0] == '.':
+                value_wrapper = __identity
+
+            out.append(some(lambda x: x.type == type_) >> value_wrapper >> inner)
+
+    for rule in rules:
+        m = r.match(rule)
+        if m is None:
+            exit_bad_rule("Misformatted custom rule")
+        make_parser(*m.groups())
+
+    rule = None
+    if not actor_set:
+        exit_bad_rule(".actor never set in custom rule")
+
+    @__wrap_result
+    def final(t, start, end):
+        p = {**params}
+        if not isinstance(t, dict):
+            for x in t:
+                p.update(x)
+        else:
+            p.update(t)
+        return p
+
+    return len(out), (sum(out[1:], out[0]) >> final)
+
+def parse_custom_rules(ss: List[Tuple[str, str]]) -> Optional[Parser]:
+    # longest rules first
+    _, parsers = zip(*sorted((__parse_custom_rule(name, s) for name, s in ss if s.strip()), key=lambda x: x[0]))
+    parsers = parsers[::-1]
+
+    if parsers:
+        final = parsers[0]
+        for parser in parsers[1:]:
+            final = final | parser
+        return final
+    return None
+
+def parse(
+    seq: List[Token],
+    gen_actor: Callable[[str, str], Actor],
+    custom_action_parser: Optional[Parser]=None,
+    custom_query_parser: Optional[Parser]=None
+) -> Tuple[List[RootNode], List[Actor]]:
     actors: Dict[str, Actor] = {}
     actor_secondary_names, seq = __process_actor_annotations(seq)
-
-    tokval = __wrap_result(lambda x, s, e: x)
-    toktype = lambda t: some(lambda x: x.type == t)
-    tokop = lambda typ: skip(some(lambda x: x.type == typ))
-    tokkw = lambda name: skip(a(Token('ID', name)))
-
-    def make_array(n):
-        r = __collapse_results(n, depth=1)
-        re
-        if n is None:
-            return __Result([], (0, 0), (0, 0))
-        else:
-            return __Result(
-                [x.value for x in [n[0]] + n[1] if x.value is not None],
-                min(x.start for x in [n[0]] + n[1] if x.start > (0, 0)),
-                max(x.end for x in [n[0]] + n[1] if x.end > (0, 0)),
-            )
-
-    int_ = __wrap_result(lambda n, s, e: TypedValue(type=IntType, value=int(n)))
-    float_ = __wrap_result(lambda n, s, e: TypedValue(type=FloatType, value=float(n)))
-    bool_ = __wrap_result(lambda n, s, e: TypedValue(type=BoolType, value=(n == 'true')))
-    string = __wrap_result(lambda n, s, e: TypedValue(type=StrType, value=n[1:-1]))
-    type_ = __wrap_result(lambda n, s, e: Type(type=n))
-
-    id_ = toktype('ID')
 
     nid = 0
     def next_id() -> int:
@@ -276,17 +383,20 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
         rv, nid = nid, nid + 1
         return rv
 
-    def check_function(actor, name, params, type_):
+    def check_function(actor, name, params, type_, prepare_params=True):
         function_name = f'EventFlow{type_.capitalize()}{name}'
         if actor not in actors:
             actors[actor] = gen_actor(actor, actor_secondary_names.get(actor, ''))
         mp = getattr(actors[actor], ['actions', 'queries'][type_ == 'query'])
         assert function_name in mp, f'no {type_} with name "{function_name}" found'
         function = mp[function_name]
-        try:
-            pdict = function.prepare_param_dict(params)
-        except AssertionError as e:
-            raise e # todo: better error messages
+        if prepare_params:
+            try:
+                pdict = function.prepare_param_dict(params)
+            except AssertionError as e:
+                raise e # todo: better error messages
+        else:
+            pdict = None
         return function_name, function, pdict
 
     @__wrap_result
@@ -294,6 +404,16 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
         actor_name, action_name, params = n
         action_name, action, pdict = check_function(actor_name, action_name, params, 'action')
         return (), (ActionNode(f'Event{next_id()}', action, pdict),)
+
+    @__wrap_result
+    def make_custom_action(n, start, end):
+        actor_name = n.pop('.actor')
+        action_name = n.pop('.name')
+        n.pop('.negated')
+        params = n
+
+        action_name, action, _ = check_function(actor_name, action_name, params, 'action', prepare_params=False)
+        return (), (ActionNode(f'Event{next_id()}', action, params),)
 
     @__wrap_result
     def make_case(n, start, end):
@@ -304,7 +424,7 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
     def _get_query_num_values(query, start, end):
         num_values = query.num_values
         if num_values == 999999999:
-            emit_warning(f'maximum value for {query.name} unknown; assuming 50', start, end, print_source=False)
+            emit_warning(f'maximum value for {query.name} unknown; assuming 50', start, end, pr__intsource=False)
             emit_warning(f'setting a maximum value in functions.csv may reduce generated bfevfl size', start, end)
             num_values = 50
         return num_values
@@ -345,12 +465,20 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
 
     @__wrap_result
     def make_bool_function(p, start, end):
-        actor_name, query_name, params = p
-        query_name, query, pdict = check_function(actor_name, query_name, params, 'query')
+        if isinstance(p, dict):
+            actor_name = p.pop('.actor')
+            query_name = p.pop('.name')
+            negated = p.pop('.negated')
+            params = pdict = p
+            query_name, query, _ = check_function(actor_name, query_name, params, 'query', prepare_params=False)
+        else:
+            actor_name, query_name, params = p
+            negated = False
+            query_name, query, pdict = check_function(actor_name, query_name, params, 'query')
         num_values = _get_query_num_values(query, start, end)
         if num_values > 2:
             emit_warning(f'call to {query_name} treated as boolean function but may not be', start, end)
-        return ((query, pdict), [({0}, query.inverted), (set(range(1, num_values)), not query.inverted)])
+        return ((query, pdict), [({0}, query.inverted != negated), (set(range(1, num_values)), (not query.inverted) != negated)])
 
     @__wrap_result
     def make_in(p, start, end):
@@ -550,21 +678,21 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
 
     # value = INT | STRING | FLOAT | BOOL | ID (todo)
     value = (
-        toktype('INT') >> int_
-        | toktype('FLOAT') >> float_
-        | tokkw('true') >> bool_
-        | tokkw('false') >> bool_
-        | toktype('STRING') >> string
+        __toktype('INT') >> __int
+        | __toktype('FLOAT') >> __float
+        | __tokkw('true') >> __bool
+        | __tokkw('false') >> __bool
+        | __toktype('STRING') >> __string
     )
 
     # pass = PASS NL
-    pass_ = (tokkw('pass') + tokop('NL')) >> make_none
+    pass_ = (__tokkw('pass') + __tokop('NL')) >> make_none
 
     # return = RETURN NL
-    return_ = (tokkw('return') + tokop('NL')) >> make_return
+    return_ = (__tokkw('return') + __tokop('NL')) >> make_return
 
     # function_params =  [value { COMMA value }]
-    function_params = maybe(value + many(tokop('COMMA') + value)) >> make_array
+    function_params = maybe(value + many(__tokop('COMMA') + value)) >> __make_array
 
     # actor_name = id
     actor_name = id_
@@ -572,36 +700,45 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
     function_name = id_
     # base_function = actor_name DOT action_name LPAREN function_params RPAREN
     base_function = (
-        actor_name + tokop('DOT') + function_name +
-        tokop('LPAREN') + function_params + tokop('RPAREN')
+        actor_name + __tokop('DOT') + function_name +
+        __tokop('LPAREN') + function_params + __tokop('RPAREN')
     )
-    # function = base_function | LPAREN function RPAREN
+    # function = custom_query_parser | base_function | LPAREN function RPAREN
     function = forward_decl()
-    function.define(base_function | (tokop('LPAREN') + function + tokop('RPAREN')))
+    if custom_query_parser is not None:
+        function_ = base_function | custom_query_parser
+    else:
+        function_ = base_function
+    function_ = function_ | (__tokop('LPAREN') + function + __tokop('RPAREN'))
+    function.define(function_)
 
     # simple_action = function NL
-    simple_action = function + tokop('NL') >> make_action
+    simple_action = function + __tokop('NL') >> make_action
 
-    # action = simple_action (todo: converted actions)
-    action = simple_action
+    # action = custom_action_parser | simple_action
+    if custom_action_parser is not None:
+        custom_action_parser = custom_action_parser >> make_custom_action
+        action = custom_action_parser | simple_action
+    else:
+        action = simple_action
 
-    # int_list = INT {COMMA INT} [COMMA] | LPAREN int_list RPAREN
-    int_list = forward_decl()
-    int_list.define(((toktype('INT') >> int_) + many(tokop('COMMA') + (toktype('INT') >> int_)) + maybe(tokop('COMMA')) >> make_array) | \
-            tokop('LPAREN') + int_list + tokop('RPAREN'))
+    # __intlist = INT {COMMA INT} [COMMA] | LPAREN __intlist RPAREN
+    __intlist = forward_decl()
+    __intlist.define(((__toktype('INT') >> __int) + many(__tokop('COMMA') + (__toktype('INT') >> __int)) + maybe(__tokop('COMMA')) >> __make_array) | \
+            __tokop('LPAREN') + __intlist + __tokop('RPAREN'))
 
-    # case = CASE int_list block
-    case = tokkw('case') + int_list + block >> make_case
+    # case = CASE __intlist block
+    case = __tokkw('case') + __intlist + block >> make_case
 
     # default = DEFAULT block
-    default = tokkw('default') + block >> make_case
+    default = __tokkw('default') + block >> make_case
 
     # cases = { case } [ default ] { case } | pass
     cases = many(case) + maybe(default) + many(case) | pass_
 
     # switch = SWITCH function COLON NL INDENT cases DEDENT
-    switch = tokkw('switch') + function + tokop('COLON') + tokop('NL') + \
-            tokop('INDENT') + cases + tokop('DEDENT') >> make_switch
+    switch = __tokkw('switch') + function + __tokop('COLON') + __tokop('NL') + \
+            __tokop('INDENT') + cases + __tokop('DEDENT') >> make_switch
 
     predicate = forward_decl()
     predicate0 = forward_decl()
@@ -611,29 +748,29 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
     # bool_function = function
     bool_function = function >> make_bool_function
 
-    # in_predicate = function IN int_list
-    in_predicate = function + tokkw('in') + int_list >> make_in
+    # in_predicate = function IN __intlist
+    in_predicate = function + __tokkw('in') + __intlist >> make_in
 
     # cmp_predicate = function CMP INT
-    cmp_predicate = function + toktype('CMP') + (toktype('INT') >> int_) >> make_cmp
+    cmp_predicate = function + __toktype('CMP') + (__toktype('INT') >> __int) >> make_cmp
 
     # not_predicate = NOT predicate0
-    not_predicate = tokkw('not') + predicate0 >> make_not
+    not_predicate = __tokkw('not') + predicate0 >> make_not
 
     # paren_predicate = LPAREN predicate RPAREN
-    paren_predicate = tokop('LPAREN') + predicate + tokop('RPAREN')
+    paren_predicate = __tokop('LPAREN') + predicate + __tokop('RPAREN')
 
     # predicate0 = in_predicate | cmp_predicate | not_predicate | bool_function | paren_predicate
     predicate0.define(in_predicate | cmp_predicate | not_predicate | bool_function | paren_predicate)
 
     # and_predicate = predicate0 AND predicate1
-    and_predicate = predicate0 + tokkw('and') + predicate1 >> make_and
+    and_predicate = predicate0 + __tokkw('and') + predicate1 >> make_and
 
     # predicate1 = and_predicate | predicate0
     predicate1.define(and_predicate | predicate0)
 
     # or_predicate = predicate1 OR predicate2
-    or_predicate = predicate1 + tokkw('or') + predicate2 >> make_or
+    or_predicate = predicate1 + __tokkw('or') + predicate2 >> make_or
 
     # predicate2 = or_predicate | predicate1
     predicate2.define(or_predicate | predicate1)
@@ -642,47 +779,47 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
     predicate.define(predicate2)
 
     # if = IF predicate block
-    if_ = tokkw('if') + predicate + block
+    if_ = __tokkw('if') + predicate + block
 
     # elif = ELIF predicate block
-    elif_ = tokkw('elif') + predicate + block
+    elif_ = __tokkw('elif') + predicate + block
 
     # else = ELSE block
-    else_ = tokkw('else') + block
+    else_ = __tokkw('else') + block
 
     # ifelse = if { elif } [ else ]
     ifelse = if_ + many(elif_) + maybe(else_) >> make_ifelse
 
     # branches = { BRANCH block }
     # branchless case handled implicitly by lack of INDENT
-    branches = many(tokkw('branch') + block)
+    branches = many(__tokkw('branch') + block)
 
     # fork = FORK COLON NL INDENT branches DEDENT
-    fork = tokkw('fork') + tokop('COLON') + tokop('NL') + \
-            tokop('INDENT') + branches + tokop('DEDENT') >> make_fork
+    fork = __tokkw('fork') + __tokop('COLON') + __tokop('NL') + \
+            __tokop('INDENT') + branches + __tokop('DEDENT') >> make_fork
 
     # flow_name = [id COLON COLON] id
-    flow_name = maybe(id_ + tokop('COLON') + tokop('COLON')) + id_
+    flow_name = maybe(id_ + __tokop('COLON') + __tokop('COLON')) + id_
 
     # subflow_param = id ASSIGN value
-    subflow_param = id_ + tokop('ASSIGN') + value >> make_subflow_param
+    subflow_param = id_ + __tokop('ASSIGN') + value >> make_subflow_param
 
     # subflow_params = [subflow_param { COMMA subflow_param }]
-    subflow_params = maybe(subflow_param + many(tokop('COMMA') + subflow_param)) >> make_array
+    subflow_params = maybe(subflow_param + many(__tokop('COMMA') + subflow_param)) >> __make_array
 
     # run = RUN flow_name LPAREN subflow_params RPAREN NL
     run = (
-        tokkw('run') + flow_name + tokop('LPAREN') + subflow_params + tokop('RPAREN') + tokop('NL')
+        __tokkw('run') + flow_name + __tokop('LPAREN') + subflow_params + __tokop('RPAREN') + __tokop('NL')
     ) >> make_subflow
 
     # stmt = action | switch | ifelse | fork | run | pass_ | return | NL
-    stmt = action | switch | ifelse | fork | run | pass_ | return_ | (tokop('NL') >> make_none)
+    stmt = action | switch | ifelse | fork | run | pass_ | return_ | (__tokop('NL') >> make_none)
 
     # entrypoint = ENTRYPOINT id COLON NL
-    entrypoint = tokkw('entrypoint') + id_ + tokop('COLON') + tokop('NL')
+    entrypoint = __tokkw('entrypoint') + id_ + __tokop('COLON') + __tokop('NL')
 
     # stmts = stmt { stmt }
-    stmts = stmt + many(stmt) >> make_array
+    stmts = stmt + many(stmt) >> __make_array
 
     # ep_block_body = [entrypoint] stmts
     ep_block_body = maybe(entrypoint) + stmts >> link_ep_block
@@ -691,24 +828,24 @@ def parse(seq: List[Token], gen_actor: Callable[[str, str], Actor]) -> Tuple[Lis
     block_body = ep_block_body + many(ep_block_body) >> link_block
 
     # block = COLON NL INDENT block_body DEDENT
-    block.define(tokop('COLON') + tokop('NL') + tokop('INDENT') + block_body + tokop('DEDENT'))
+    block.define(__tokop('COLON') + __tokop('NL') + __tokop('INDENT') + block_body + __tokop('DEDENT'))
 
     # type = INT | FLOAT | STR | BOOL
-    type_atom = tokkw('int') | tokkw('float') | tokkw('str') | tokkw('bool')
+    type_atom = __tokkw('int') | __tokkw('float') | __tokkw('str') | __tokkw('bool')
 
     # flow_param = ID COLON TYPE
-    flow_param = id_ + tokop('COLON') + type_atom >> type_
+    flow_param = id_ + __tokop('COLON') + type_atom >> __type
 
     # flow_params = [flow_param { COMMA flow_param }]
-    flow_params = maybe(flow_param + many(tokop('COMMA') + flow_param)) >> make_array
+    flow_params = maybe(flow_param + many(__tokop('COMMA') + flow_param)) >> __make_array
 
     # flow = [LOCAL] FLOW ID LPAREN flow_params RPAREN block
     flow = (
-        maybe(a(Token('ID', 'local'))) + tokkw('flow') + id_ + tokop('LPAREN') + flow_params + tokop('RPAREN') + block
+        maybe(a(Token('ID', 'local'))) + __tokkw('flow') + id_ + __tokop('LPAREN') + flow_params + __tokop('RPAREN') + block
     ) >> make_flow
 
     # file = { flow | NL }
-    evfl_file = many(flow | (tokop('NL') >> make_none)) >> collect_flows
+    evfl_file = many(flow | (__tokop('NL') >> make_none)) >> collect_flows
 
     parser = evfl_file + skip(finished)
     roots: List[RootNode] = parser.parse(seq).value

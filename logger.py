@@ -69,3 +69,12 @@ def emit_error(message: str, *args, **kwargs) -> None:
 
 def emit_fatal(message: str, *args, **kwargs) -> None:
     log(logging.FATAL, message, *args, **kwargs)
+
+class LogException(Exception):
+    pass
+
+class LogError(LogException):
+    pass
+
+class LogFatal(LogException):
+    pass
