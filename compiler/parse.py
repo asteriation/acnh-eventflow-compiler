@@ -9,8 +9,8 @@ from funcparserlib.lexer import make_tokenizer, Token, LexerError
 from funcparserlib.parser import a, some, maybe, many, finished, skip, forward_decl, NoParseError, _Ignored, Parser
 from more_itertools import peekable
 
-from logger import emit_info, emit_warning, emit_fatal, LogFatal
-from util import find_postorder
+from compiler.logger import emit_info, emit_warning, emit_fatal, LogFatal
+from compiler.util import find_postorder
 
 from bfevfl.datatype import BoolType, FloatType, IntType, StrType, Type, TypedValue
 from bfevfl.actors import Param, Action, Actor
@@ -272,11 +272,11 @@ def __parse_custom_rule(name: str, s: str) -> Tuple[int, Parser]:
     r = re.compile(r'^([A-Z]+)\s*\(\s*(?:(".*")|([^=]+)\s*(?:\=\s*(.+))?|)\s*\)$')
     valid_token_types = set(t for t, m in __tokens)
 
-    def exit_bad_rule(message) -> NoReturn:
+    def exit_bad_rule(message, mark_rule=True) -> NoReturn:
         emit_fatal(message)
         for r in rules:
             emit_info(r)
-            if r == rule:
+            if mark_rule and r == rule:
                 emit_info('^' * len(r))
         raise LogFatal()
 
@@ -340,9 +340,8 @@ def __parse_custom_rule(name: str, s: str) -> Tuple[int, Parser]:
             exit_bad_rule("Misformatted custom rule")
         make_parser(*m.groups())
 
-    rule = None
     if not actor_set:
-        exit_bad_rule(".actor never set in custom rule")
+        exit_bad_rule(".actor never set in custom rule", mark_rule=False)
 
     @__wrap_result
     def final(t, start, end):

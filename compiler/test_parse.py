@@ -11,8 +11,8 @@ from bfevfl.datatype import BoolType, FloatType, IntType, StrType, Type
 from bfevfl.actors import Action, Actor, Query, Param
 from bfevfl.nodes import RootNode, TerminalNode, TerminalNode_, Node
 
-from parse import tokenize, parse
-from util import find_postorder
+from compiler.parse import tokenize, parse
+from compiler.util import find_postorder
 
 class TestTokenize(unittest.TestCase):
     def test_indent_dedent_simple(self):

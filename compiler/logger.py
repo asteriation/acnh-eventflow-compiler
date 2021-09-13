@@ -1,5 +1,5 @@
 import logging
-from typing import Tuple, Optional
+from typing import List, Set, Tuple, Optional
 
 LOG = logging.getLogger('evfl-compiler')
 LOG.setLevel(logging.INFO)
@@ -16,8 +16,8 @@ logging.addLevelName(logging.WARNING, 'warning')
 logging.addLevelName(logging.INFO, 'info')
 logging.addLevelName(logging.DEBUG, 'debug')
 
-_sent_messages = set()
-_file_contents = []
+_sent_messages: Set[str] = set()
+_file_contents: List[str] = []
 
 def set_log_level(level) -> None:
     LOG.setLevel(level)
@@ -48,6 +48,7 @@ def log(level, message: str,
         _sent_messages.add(message)
         LOG.log(level, message)
         if print_source and start and  1 <= start[0] <= len(_file_contents) and 1 <= start[1] <= len(_file_contents[start[0] - 1]):
+            assert end is not None
             num_markers = min(
                 len(_file_contents[start[0] - 1]) - (start[1] - 1),
                 end[1] - start[1] + 1 if end[0] == start[0] else 999999,
