@@ -637,7 +637,7 @@ def parse(
 
         if not block:
             if ep is not None:
-                ep_node = RootNode(ep, [])
+                ep_node = RootNode(ep, True, [])
                 ep_node.add_out_edge(connector)
                 eps.append(ep_node)
             return (eps, connector, connector)
@@ -649,7 +649,7 @@ def parse(
                 n1.add_out_edge(n2)
 
         if ep is not None:
-            ep_node = RootNode(ep, [])
+            ep_node = RootNode(ep, True, [])
             ep_node.add_out_edge(block[0])
             eps.append(ep_node)
 
