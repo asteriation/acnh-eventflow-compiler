@@ -711,12 +711,12 @@ def parse(
     function_ = function_ | (__tokop('LPAREN') + function + __tokop('RPAREN'))
     function.define(function_)
 
-    # simple_action = function NL
-    simple_action = function + __tokop('NL') >> make_action
+    # simple_action = base_function NL
+    simple_action = base_function + __tokop('NL') >> make_action
 
     # action = custom_action_parser | simple_action
     if custom_action_parser is not None:
-        custom_action_parser = custom_action_parser >> make_custom_action
+        custom_action_parser = custom_action_parser + __tokop('NL') >> make_custom_action
         action = custom_action_parser | simple_action
     else:
         action = simple_action
