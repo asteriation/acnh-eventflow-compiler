@@ -13,6 +13,7 @@ from bfevfl.nodes import RootNode, TerminalNode, TerminalNode_, Node
 
 from compiler.parse import tokenize, parse
 from compiler.util import find_postorder
+from compiler.logger import set_log_level
 
 class TestTokenize(unittest.TestCase):
     def test_indent_dedent_simple(self):
@@ -290,7 +291,8 @@ class TestParser(unittest.TestCase):
 
     def test_files(self):
         self.maxDiff = None
-        logging.basicConfig(level=logging.ERROR)
+
+        set_log_level(level=logging.ERROR)
         for c, err in TestParser.CASES:
             with self.subTest(msg=f'test_{c}'):
                 with open(f'{TestParser.TEST_DIR}/{c}.evfl', 'rt') as ef:
