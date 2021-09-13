@@ -34,7 +34,7 @@ class IntArray(DataBlock):
 
         self.n = len(items)
         for i, item in enumerate(items):
-            self.buffer.overwrite(pack('uintle:32', item))
+            self.buffer.overwrite(pack('uintle:32', item & 0xFFFFFFFF))
 
     def alignment(self) -> int:
         return 4
@@ -45,7 +45,7 @@ class Uint16Array(DataBlock):
 
         self.n = len(items)
         for i, item in enumerate(items):
-            self.buffer.overwrite(pack('uintle:16', item))
+            self.buffer.overwrite(pack('uintle:16', item & 0xFFFF))
 
     def alignment(self) -> int:
         return 8

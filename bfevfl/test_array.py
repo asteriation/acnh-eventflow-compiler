@@ -45,9 +45,9 @@ class TestArray(unittest.TestCase):
         self.assertEqual(arr.prepare_bitstream(), Bits(''))
 
     def test_uint16(self):
-        arr = Uint16Array([0x1234, 0x5678])
+        arr = Uint16Array([0x1234, 0x5678, -1])
         self.assertEqual(arr.prepare_bitstream(),
-                Bits(b'\x34\x12\x78\x56')
+                Bits(b'\x34\x12\x78\x56\xff\xff')
         )
 
     def test_int_empty(self):
@@ -55,9 +55,9 @@ class TestArray(unittest.TestCase):
         self.assertEqual(arr.prepare_bitstream(), Bits(''))
 
     def test_int(self):
-        arr = IntArray([0x12345678, 0x9abcdef0])
+        arr = IntArray([0x12345678, 0x9abcdef0, -1])
         self.assertEqual(arr.prepare_bitstream(),
-                Bits(b'\x78\x56\x34\x12\xf0\xde\xbc\x9a')
+                Bits(b'\x78\x56\x34\x12\xf0\xde\xbc\x9a\xff\xff\xff\xff')
         )
 
     def test_bool_empty(self):
