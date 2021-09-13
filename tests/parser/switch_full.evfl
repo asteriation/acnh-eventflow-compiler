@@ -1,7 +1,6 @@
 flow Test():
     switch TestActor1.Query0():
-        case 0:
+        default:
             TestActor1.Action0()
         case 2, 1:
             TestActor2.Action0()
-

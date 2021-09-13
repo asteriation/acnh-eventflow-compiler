@@ -416,7 +416,7 @@ def parse(
 
     @__wrap_result
     def make_case(n, start, end):
-        if isinstance(n, tuple):
+        if isinstance(n, tuple) and len(n) == 2:
             return ([x.value for x in n[0]], n[1])
         return n
 
@@ -451,7 +451,8 @@ def parse(
         default_values = set(range(num_values)) - set(sum((v for v, n in cases), []))
         if default_values:
             if default is not None:
-                default.add_out_edge(sw.connector)
+                _, default, connector = default
+                connector.add_out_edge(sw.connector)
 
             default_branch = default or sw.connector
             sw.add_out_edge(default_branch)
