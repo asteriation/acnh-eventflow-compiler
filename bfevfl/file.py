@@ -5,7 +5,7 @@ from typing import List, Set
 from bitstring import BitStream, pack
 
 from .actors import Actor
-from .nodes import Node, RootNode
+from .nodes import Node, RootNode, SubflowNode
 from .block import DataBlock, ContainerBlock
 from .str_ import StringPool
 from .dic_ import Dictionary
@@ -62,7 +62,12 @@ class File(ContainerBlock):
 
         pooled_strings: Set[str] = set()
         pooled_strings.add(filename)
-        pooled_strings.update(n.name for n in nodes)
+        for n in nodes:
+            pooled_strings.add(n.name)
+            if isinstance(n, SubflowNode):
+                if n.ns:
+                    pooled_strings.add(n.ns)
+                pooled_strings.add(n.called_root_name)
         for actor in actors:
             add_actor = False
             for n, a in actor.actions.items():
