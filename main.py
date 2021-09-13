@@ -113,9 +113,9 @@ def process_file(filename):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('-f', metavar='functions.csv', default='functions.csv',
+    parser.add_argument('--functions', metavar='functions.csv', default='functions.csv',
             help='functions.csv for EventFlow function type information (default: ./functions.csv)')
-    parser.add_argument('-v', metavar='version', default='9.9.9', help='target game version (default: 9.9.9)')
+    parser.add_argument('--version', metavar='version', default='9.9.9', help='target game version (default: 9.9.9)')
     parser.add_argument('-d', metavar='output_directory', help='output directory')
     parser.add_argument('-o', metavar='file', help='file to output to, overrides -d, ' +
             'cannot be used for multiple input files')
@@ -127,12 +127,12 @@ if __name__ == '__main__':
             emit_fatal('-o cannot be used with multiple input files')
             raise LogFatal()
 
-        fcsv = Path(args.f)
+        fcsv = Path(args.functions)
         if not fcsv.exists() or not fcsv.is_file():
             emit_fatal(f'cannot open {args.f}')
             raise LogFatal()
         with fcsv.open('rt') as f:
-            actor_gen, action_rules, query_rules = actor_gen_prepare(csv.reader(f), args.v)
+            actor_gen, action_rules, query_rules = actor_gen_prepare(csv.reader(f), args.version)
 
         custom_action_parser = parse_custom_rules(action_rules)
         custom_query_parser = parse_custom_rules(query_rules)
