@@ -1,6 +1,3 @@
-RootNode[name=EP1, vardefs=[], out_edges=[Event0]]
-RootNode[name=EP2, vardefs=[], out_edges=[Event5]]
-RootNode[name=EP3, vardefs=[], out_edges=[Event11]]
 RootNode[name=Test, vardefs=[], out_edges=[Event8]]
 ActionNode[name=Event0, action=EventFlowActionAction0(), params={}, out_edges=[]]
 ActionNode[name=Event3, action=EventFlowActionAction0(), params={}, out_edges=[Event5]]
