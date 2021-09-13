@@ -68,6 +68,8 @@ class File(ContainerBlock):
                 if n.ns:
                     pooled_strings.add(n.ns)
                 pooled_strings.add(n.called_root_name)
+                # keys are in pool, but values are stored in place
+                pooled_strings.update(n.params.keys())
         for actor in actors:
             add_actor = False
             for n, a in actor.actions.items():
