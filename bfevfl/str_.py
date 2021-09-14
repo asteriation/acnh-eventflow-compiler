@@ -23,15 +23,16 @@ class _CString(Block):
 class String(DataBlock):
     def __init__(self, string: str) -> None:
         # u16 len + string + null terminator
-        super().__init__(3 + len(string))
+        super().__init__(3 + len(string.encode('utf-8')))
         self.string = string
 
         self.c_str = _CString()
         self.c_str.set_offset(2)
 
         with self._at_offset(0):
-            self.buffer.overwrite(pack('uintle:16', len(string)))
-            self.buffer.overwrite(string.encode('ascii'))
+            b = string.encode('utf-8')
+            self.buffer.overwrite(pack('uintle:16', len(b)))
+            self.buffer.overwrite(b)
 
     def set_offset(self, offset: int) -> None:
         self.c_str.set_offset(offset + 2)
