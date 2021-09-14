@@ -9,7 +9,7 @@ from funcparserlib.lexer import make_tokenizer, Token, LexerError
 from funcparserlib.parser import a, some, maybe, many, finished, skip, forward_decl, NoParseError, _Ignored, Parser
 from more_itertools import peekable
 
-from compiler.logger import emit_info, emit_warning, emit_fatal, LogFatal
+from compiler.logger import emit_info, emit_warning, emit_error, emit_fatal, LogError, LogFatal
 from compiler.util import find_postorder
 
 from bfevfl.datatype import BoolType, FloatType, IntType, StrType, Type, TypedValue
@@ -223,7 +223,9 @@ def __verify_calls(root: Node, local_roots: Dict[str, RootNode], exported_roots:
             if node.called_root_name not in exported_roots and node.called_root_name not in local_roots:
                 emit_warning(f'{node.called_root_name} called but not defined')
             if node.called_root_name in local_roots:
-                assert tail_call, 'non-tail-call local subflows not implemented'
+                if not tail_call:
+                    emit_error('non-tail-call local subflows not implemented')
+                    raise LogError()
                 reroutes[node] = local_roots[node.called_root_name].out_edges[0]
             elif tail_call:
                 reroutes[node] = exported_roots[node.called_root_name].out_edges[0]
