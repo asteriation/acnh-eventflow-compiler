@@ -753,6 +753,9 @@ def parse(
     # in_predicate = function IN __intlist
     in_predicate = function + __tokkw('in') + __intlist >> make_in
 
+    # not_in_predicate = function IN __intlist
+    not_in_predicate = function + __tokkw('not') + __tokkw('in') + __intlist >> make_in >> make_not
+
     # cmp_predicate = function CMP INT
     cmp_predicate = function + __toktype('CMP') + (__toktype('INT') >> __int) >> make_cmp
 
@@ -762,8 +765,8 @@ def parse(
     # paren_predicate = LPAREN predicate RPAREN
     paren_predicate = __tokop('LPAREN') + predicate + __tokop('RPAREN')
 
-    # predicate0 = in_predicate | cmp_predicate | not_predicate | bool_function | paren_predicate
-    predicate0.define(in_predicate | cmp_predicate | not_predicate | bool_function | paren_predicate)
+    # predicate0 = in_predicate | not_in_predicate | cmp_predicate | not_predicate | bool_function | paren_predicate
+    predicate0.define(in_predicate | not_in_predicate | cmp_predicate | not_predicate | bool_function | paren_predicate)
 
     # and_predicate = predicate0 AND predicate1
     and_predicate = predicate0 + __tokkw('and') + predicate1 >> make_and
