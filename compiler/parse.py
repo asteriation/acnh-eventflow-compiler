@@ -252,7 +252,7 @@ def __process_local_calls(roots: List[RootNode], local_roots: Dict[str, RootNode
                 tail_call = (len(node.out_edges) == 1 and node.out_edges[0] is TerminalNode)
                 if node.called_root_name in local_roots:
                     reroutes[node] = local_roots[node.called_root_name].out_edges[0]
-                elif tail_call:
+                elif tail_call: # TODO expose as flag, this makes decompile ugly
                     reroutes[node] = exported_roots[node.called_root_name].out_edges[0]
 
         for old, new in reroutes.items():
