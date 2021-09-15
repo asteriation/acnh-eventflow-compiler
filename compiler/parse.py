@@ -414,7 +414,7 @@ def parse(
         rv, nid = nid, nid + 1
         return rv
 
-    def check_function(p, type_):
+    def check_function(p, type_, start, end):
         if len(p) == 1:
             p = p[0]
         if isinstance(p, dict):
@@ -431,18 +431,21 @@ def parse(
         if actor not in actors:
             actors[actor] = gen_actor(actor, actor_secondary_names.get(actor, ''))
         mp = getattr(actors[actor], ['actions', 'queries'][type_ == 'query'])
-        assert function_name in mp, f'no {type_} with name "{function_name}" found'
+        if function_name not in mp:
+            emit_error(f'no {type_} with name "{function_name}" found', start, end)
+            raise LogError()
         function = mp[function_name]
         if prepare_params:
             try:
                 pdict = function.prepare_param_dict(params)
             except AssertionError as e:
-                raise e # todo: better error messages
+                emit_error(e.message, start, end)
+                raise LogError()
         return function_name, function, pdict, negated
 
     @__wrap_result
     def make_action(n, start, end):
-        action_name, action, pdict, _ = check_function(n, 'action')
+        action_name, action, pdict, _ = check_function(n, 'action', start, end)
         return (), (ActionNode(f'Event{next_id()}', action, pdict),)
 
     @__wrap_result
@@ -465,7 +468,7 @@ def parse(
         cases = branches[0] + branches[2]
         default = branches[1]
 
-        query_name, query, pdict, _ = check_function(p, 'query')
+        query_name, query, pdict, _ = check_function(p, 'query', start, end)
         sw = SwitchNode(f'Event{next_id()}', query, pdict)
         entrypoints = []
         for values, block in cases:
@@ -496,7 +499,7 @@ def parse(
 
     @__wrap_result
     def make_bool_function(p, start, end):
-        query_name, query, pdict, negated = check_function(p, 'query')
+        query_name, query, pdict, negated = check_function(p, 'query', start, end)
         num_values = _get_query_num_values(query, start, end)
         if num_values > 2:
             emit_warning(f'call to {query_name} treated as boolean function but may not be', start, end)
@@ -505,7 +508,7 @@ def parse(
     @__wrap_result
     def make_in(p, start, end):
         p, values = p[:-1], p[-1]
-        query_name, query, pdict, _ = check_function(p, 'query')
+        query_name, query, pdict, _ = check_function(p, 'query', start, end)
         num_values = _get_query_num_values(query, start, end)
         matched = set()
         unmatched = set(range(num_values))
@@ -522,7 +525,7 @@ def parse(
     @__wrap_result
     def make_cmp(p, start, end):
         p, op, value = p[:-2], p[-2], p[-1]
-        query_name, query, pdict, _ = check_function(p, 'query')
+        query_name, query, pdict, _ = check_function(p, 'query', start, end)
         num_values = _get_query_num_values(query, start, end)
         if op == '==' or op == '!=':
             matched = {value.value} if 0 <= value.value < num_values else set()
@@ -668,7 +671,9 @@ def parse(
     def make_flow(n, start, end):
         local, name, params, body = n
         entrypoints, body_root, body_connector = body
-        assert not params, 'vardefs todo'
+        if params:
+            emit_error('vardefs are not implemented yet', start, end)
+            raise LogError()
         node = RootNode(name, local is not None, [])
         node.add_out_edge(body_root)
         body_connector.add_out_edge(TerminalNode)
