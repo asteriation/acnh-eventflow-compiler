@@ -411,7 +411,19 @@ def parse(
         rv, nid = nid, nid + 1
         return rv
 
-    def check_function(actor, name, params, type_, prepare_params=True):
+    def check_function(p, type_):
+        if len(p) == 1:
+            p = p[0]
+        if isinstance(p, dict):
+            actor = p.pop('.actor')
+            name = p.pop('.name')
+            negated = p.pop('.negated')
+            params = pdict = p
+            prepare_params = False
+        else:
+            actor, name, params = p
+            negated = False
+            prepare_params = True
         function_name = f'EventFlow{type_.capitalize()}{name}'
         if actor not in actors:
             actors[actor] = gen_actor(actor, actor_secondary_names.get(actor, ''))
@@ -423,25 +435,12 @@ def parse(
                 pdict = function.prepare_param_dict(params)
             except AssertionError as e:
                 raise e # todo: better error messages
-        else:
-            pdict = None
-        return function_name, function, pdict
+        return function_name, function, pdict, negated
 
     @__wrap_result
     def make_action(n, start, end):
-        actor_name, action_name, params = n
-        action_name, action, pdict = check_function(actor_name, action_name, params, 'action')
+        action_name, action, pdict, _ = check_function(n, 'action')
         return (), (ActionNode(f'Event{next_id()}', action, pdict),)
-
-    @__wrap_result
-    def make_custom_action(n, start, end):
-        actor_name = n.pop('.actor')
-        action_name = n.pop('.name')
-        n.pop('.negated')
-        params = n
-
-        action_name, action, _ = check_function(actor_name, action_name, params, 'action', prepare_params=False)
-        return (), (ActionNode(f'Event{next_id()}', action, params),)
 
     @__wrap_result
     def make_case(n, start, end):
@@ -459,11 +458,11 @@ def parse(
 
     @__wrap_result
     def make_switch(n, start, end):
-        actor_name, query_name, params, branches = n
+        p, branches = n[:-1], n[-1]
         cases = branches[0] + branches[2]
         default = branches[1]
 
-        query_name, query, pdict = check_function(actor_name, query_name, params, 'query')
+        query_name, query, pdict, _ = check_function(p, 'query')
         sw = SwitchNode(f'Event{next_id()}', query, pdict)
         entrypoints = []
         for values, block in cases:
@@ -494,16 +493,7 @@ def parse(
 
     @__wrap_result
     def make_bool_function(p, start, end):
-        if isinstance(p, dict):
-            actor_name = p.pop('.actor')
-            query_name = p.pop('.name')
-            negated = p.pop('.negated')
-            params = pdict = p
-            query_name, query, _ = check_function(actor_name, query_name, params, 'query', prepare_params=False)
-        else:
-            actor_name, query_name, params = p
-            negated = False
-            query_name, query, pdict = check_function(actor_name, query_name, params, 'query')
+        query_name, query, pdict, negated = check_function(p, 'query')
         num_values = _get_query_num_values(query, start, end)
         if num_values > 2:
             emit_warning(f'call to {query_name} treated as boolean function but may not be', start, end)
@@ -511,8 +501,8 @@ def parse(
 
     @__wrap_result
     def make_in(p, start, end):
-        actor_name, query_name, params, values = p
-        query_name, query, pdict = check_function(actor_name, query_name, params, 'query')
+        p, values = p[:-1], p[-1]
+        query_name, query, pdict, _ = check_function(p, 'query')
         num_values = _get_query_num_values(query, start, end)
         matched = set()
         unmatched = set(range(num_values))
@@ -528,8 +518,8 @@ def parse(
 
     @__wrap_result
     def make_cmp(p, start, end):
-        actor_name, query_name, params, op, value = p
-        query_name, query, pdict = check_function(actor_name, query_name, params, 'query')
+        p, op, value = p[:-2], p[-2], p[-1]
+        query_name, query, pdict, _ = check_function(p, 'query')
         num_values = _get_query_num_values(query, start, end)
         if op == '==' or op == '!=':
             matched = {value.value} if 0 <= value.value < num_values else set()
@@ -773,7 +763,7 @@ def parse(
 
     # action = custom_action_parser | simple_action
     if custom_action_parser is not None:
-        custom_action_parser = custom_action_parser + __tokop('NL') >> make_custom_action
+        custom_action_parser = custom_action_parser + __tokop('NL') >> make_action
         action = custom_action_parser | simple_action
     else:
         action = simple_action
