@@ -1,8 +1,0 @@
-flow Root1():
-    TestActor1.Action0()
-    run Root2()
-    run Root2()
-
-local flow Root2():
-    TestActor1.Action0()
-

@@ -1,0 +1,11 @@
+flow Root():
+    if TestActor1.Query0() == 0:
+        TestActor1.Action0()
+        run Local()
+    else:
+        TestActor1.Action0()
+        run Local()
+    run Local()
+
+local flow Local():
+    TestActor1.Action0()

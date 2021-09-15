@@ -215,23 +215,43 @@ def __replace_node(root: Node, replace: Node, replacement: Optional[Node]) -> No
             else:
                 node.reroute_out_edge(replace, replacement)
 
-def __verify_calls(root: Node, local_roots: Dict[str, RootNode], exported_roots: Dict[str, RootNode]) -> None:
-    reroutes = {}
-    for node in find_postorder(root):
-        if isinstance(node, SubflowNode) and node.ns == '':
-            tail_call = (len(node.out_edges) == 1 and node.out_edges[0] is TerminalNode)
-            if node.called_root_name not in exported_roots and node.called_root_name not in local_roots:
-                emit_warning(f'{node.called_root_name} called but not defined')
-            if node.called_root_name in local_roots:
-                if not tail_call:
-                    emit_error('non-tail-call local subflows not implemented')
-                    raise LogError()
-                reroutes[node] = local_roots[node.called_root_name].out_edges[0]
-            elif tail_call:
-                reroutes[node] = exported_roots[node.called_root_name].out_edges[0]
+def __process_local_calls(roots: List[RootNode], local_roots: Dict[str, RootNode], exported_roots: Dict[str, RootNode]):
+    post_calls = {}
+    for root in roots:
+        for node in find_postorder(root):
+            if isinstance(node, SubflowNode) and node.ns == '':
+                if node.called_root_name not in exported_roots and node.called_root_name not in local_roots:
+                    emit_warning(f'{node.called_root_name} called but not defined')
+                if node.out_edges and node.called_root_name in local_roots:
+                    assert len(node.out_edges) == 1
+                    post_calls[node.called_root_name] = post_calls.get(node.called_root_name, set())
+                    post_calls[node.called_root_name].add(node.out_edges[0])
 
-    for old, new in reroutes.items():
-        __replace_node(root, old, new)
+    for name, root in list(local_roots.items()):
+        if name not in post_calls:
+            continue
+        if len(post_calls[name]) == 1:
+            continue_ = next(iter(post_calls[name]))
+            if continue_ is TerminalNode:
+                continue
+            __replace_node(root, TerminalNode, continue_)
+        else:
+            emit_warning(f'flow {name} is local but forcing export')
+            exported_roots[name] = local_roots[name]
+            del local_roots[name]
+
+    for root in roots:
+        reroutes = {}
+        for node in find_postorder(root):
+            if isinstance(node, SubflowNode) and node.ns == '':
+                tail_call = (len(node.out_edges) == 1 and node.out_edges[0] is TerminalNode)
+                if node.called_root_name in local_roots:
+                    reroutes[node] = local_roots[node.called_root_name].out_edges[0]
+                elif tail_call:
+                    reroutes[node] = exported_roots[node.called_root_name].out_edges[0]
+
+        for old, new in reroutes.items():
+            __replace_node(root, old, new)
 
 def __flatten_helper(lst: Iterable[Any]) -> Generator[Any, None, None]:
     for x in lst:
@@ -597,7 +617,6 @@ def parse(
                 next_ = node
                 next_connector = branch_connector
             elif isinstance(table, TypedValue):
-                print(table)
                 if table.value:
                     next_ = node
                     next_connector = branch_connector
@@ -792,7 +811,7 @@ def parse(
     not_predicate = __tokkw('not') + predicate0 >> make_not
 
     # const_predicate = TRUE | FALSE
-    const_predicate = (__tokkw_keep('true') | __tokkw_keep('false')) >> __bool 
+    const_predicate = (__tokkw_keep('true') | __tokkw_keep('false')) >> __bool
 
     # paren_predicate = LPAREN predicate RPAREN
     paren_predicate = __tokop('LPAREN') + predicate + __tokop('RPAREN')
@@ -890,8 +909,7 @@ def parse(
     exported_roots = {r.name: r for r in roots if not r.local}
     for n in roots:
         __collapse_connectors(n)
-    for n in roots:
-        __verify_calls(n, local_roots, exported_roots)
+    __process_local_calls(roots, local_roots, exported_roots)
     for n in roots:
         __replace_node(n, TerminalNode, None)
 

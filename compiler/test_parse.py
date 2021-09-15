@@ -240,6 +240,8 @@ class TestParser(unittest.TestCase):
         ('subflow_tail_call', None),
         ('local_subflow', None),
         ('local_subflow_empty', None),
+        ('local_subflow_nontco_silent', None),
+        ('local_subflow_nontco_export', None),
         ('switch_nonfull', None),
         ('switch_full', None),
         ('switch_nonfull_nonreturn', None),
@@ -258,7 +260,6 @@ class TestParser(unittest.TestCase):
         ('err_switch_case_empty', NoParseError),
         ('err_switch_pass', NoParseError),
         ('err_consecutive_entrypoint', NoParseError),
-        ('err_local_subflow_non_tail_call', AssertionError),
     ]
 
     TEST_DIR = 'tests/parser'

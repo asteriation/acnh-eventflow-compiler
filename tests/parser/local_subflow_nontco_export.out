@@ -1,0 +1,8 @@
+RootNode[name=Local, vardefs=[], out_edges=[Event13]]
+RootNode[name=Root, vardefs=[], out_edges=[Event9]]
+ActionNode[name=Event0, action=EventFlowActionAction0(), params={}, out_edges=[Event1]]
+SubflowNode[name=Event1, ns=, called_root_name=Local, params={}, out_edges=[Event13]]
+ActionNode[name=Event4, action=EventFlowActionAction0(), params={}, out_edges=[Event5]]
+SubflowNode[name=Event5, ns=, called_root_name=Local, params={}, out_edges=[Event13]]
+SwitchNode[name=Event9, query=EventFlowQueryQuery0(), params={}, cases={'Event0': [0], 'Event4': [1, 2]}, out_edges=[Event0, Event4]]
+ActionNode[name=Event13, action=EventFlowActionAction0(), params={}, out_edges=[]]
