@@ -48,10 +48,11 @@ __tokens = [
             (?:
                 [A-Za-z_\-][A-Za-z0-9_\-]*[A-Za-z0-9]
                 | [A-Za-z][A-Za-z0-9]*)
+        | `(?:\\.|[^`\\])*`
         ''', re.VERBOSE)),
     ('FLOAT', (r'[+-]?[ \t]*(?:\d+\.\d*|\d*\.\d+)',)), # todo: fix this
     ('INT', (r'[+-]?[ \t]*\d+',)), # todo: hex
-    ('STRING', (r'"(?:\\\.|[^"\\])*"|\'(?:\\\.|[^\'\\])*\'',)),
+    ('STRING', (r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'',)),
 ]
 
 def tokenize(string: str) -> List[Token]:
@@ -286,10 +287,14 @@ def __make_array(n):
             max(x.end for x in [n[0]] + n[1] if x.end > (0, 0)),
         )
 
+def swap_chars(s, x, y):
+    m = {x: y, y: x}
+    return ''.join(m.get(c, c) for c in s)
 __int = __wrap_result(lambda n, s, e: TypedValue(type=IntType, value=int(n)))
 __float = __wrap_result(lambda n, s, e: TypedValue(type=FloatType, value=float(n)))
 __bool = __wrap_result(lambda n, s, e: TypedValue(type=BoolType, value={'false': False, 'true': True}[n]))
-__string = __wrap_result(lambda n, s, e: TypedValue(type=StrType, value=n[1:-1]))
+__string = __wrap_result(lambda n, s, e: TypedValue(type=StrType, value=eval(n)))
+__identifier = __wrap_result(lambda n, s, e: TypedValue(type=StrType, value=swap_chars(eval(swap_chars(n, '`', '"')), '`', '"') if n[0] == '`' else n))
 __type = __wrap_result(lambda n, s, e: Type(type=n))
 
 id_ = __toktype('ID')
@@ -355,7 +360,7 @@ def __parse_custom_rule(name: str, s: str) -> Tuple[int, Parser]:
                 'FLOAT': __float,
                 'BOOL': __bool,
                 'STRING': __string,
-                'ID': __string,
+                'ID': __identifier,
             }.get(type_, __identity)
             if param[0] == '.':
                 value_wrapper = __identity

@@ -143,8 +143,22 @@ class TestTokenize(unittest.TestCase):
             Token('ID', '01A_B_C'),
             Token('NL', '')
         ])
+        self.assertEqual(tokenize('`1.233 444\\` ee`'), [
+            Token('ID', '`1.233 444\\` ee`'),
+            Token('NL', '')
+        ])
         with self.assertRaises(LexerError):
             tokenize('01-')
+
+    def test_str(self):
+        self.assertEqual(tokenize('"a\\"b\\_c"'), [
+            Token('STRING', '"a\\"b\\_c"'),
+            Token('NL', '')
+        ])
+        self.assertEqual(tokenize("'a\\'b\\_c'"), [
+            Token('STRING', "'a\\'b\\_c'"),
+            Token('NL', '')
+        ])
 
     def test_entrypoints1(self):
         tokens = tokenize('\nentrypoint a:\n\ta\nentrypoint b:\n\tc')
