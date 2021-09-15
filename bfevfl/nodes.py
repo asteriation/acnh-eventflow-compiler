@@ -20,8 +20,11 @@ class Node(ABC):
         self.out_edges.remove(dest)
 
     def reroute_out_edge(self, old_dest: Node, new_dest: Node) -> None:
-        while old_dest in self.out_edges:
-            self.out_edges[self.out_edges.index(old_dest)] = new_dest
+        if old_dest in self.out_edges:
+            if new_dest not in self.out_edges:
+                self.out_edges[self.out_edges.index(old_dest)] = new_dest
+            else:
+                del self.out_edges[self.out_edges.index(old_dest)]
 
     def __str__(self) -> str:
         return f'Node[name={self.name}' + \
