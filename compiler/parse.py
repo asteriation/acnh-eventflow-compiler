@@ -242,10 +242,11 @@ def __flatten_helper(lst: Iterable[Any]) -> Generator[Any, None, None]:
 
 def __flatten(lst: Sequence[Any]) -> List[Any]:
     return list(__flatten_helper(lst))
-    
+
 __toktype = lambda t: some(lambda x: x.type == t)
 __tokop = lambda typ: skip(some(lambda x: x.type == typ))
 __tokkw = lambda name: skip(a(Token('ID', name)))
+__tokkw_keep = lambda name: a(Token('ID', name))
 __identity = __wrap_result(lambda n, s, e: n)
 
 def __make_array(n):
@@ -262,7 +263,7 @@ def __make_array(n):
 
 __int = __wrap_result(lambda n, s, e: TypedValue(type=IntType, value=int(n)))
 __float = __wrap_result(lambda n, s, e: TypedValue(type=FloatType, value=float(n)))
-__bool = __wrap_result(lambda n, s, e: TypedValue(type=BoolType, value=(n == 'true')))
+__bool = __wrap_result(lambda n, s, e: TypedValue(type=BoolType, value={'false': False, 'true': True}[n]))
 __string = __wrap_result(lambda n, s, e: TypedValue(type=StrType, value=n[1:-1]))
 __type = __wrap_result(lambda n, s, e: Type(type=n))
 
@@ -288,7 +289,7 @@ def __parse_custom_rule(name: str, s: str) -> Tuple[int, Parser]:
     def eval_(s):
         __int = lambda n: TypedValue(type=IntType, value=int(n))
         __float = lambda n: TypedValue(type=FloatType, value=float(n))
-        __bool = lambda n: TypedValue(type=BoolType, value=(n == 'true'))
+        __bool = lambda n: TypedValue(type=BoolType, value={'false': False, 'true': True}[n])
         __string = lambda n: TypedValue(type=StrType, value=n[1:-1])
         return eval(s, locals())
 
@@ -323,7 +324,7 @@ def __parse_custom_rule(name: str, s: str) -> Tuple[int, Parser]:
             @__wrap_result
             def inner(t, start, end):
                 return {param: f(type_, t)}
-            
+
             value_wrapper = {
                 'INT': __int,
                 'FLOAT': __float,
@@ -527,6 +528,15 @@ def parse(
     @__wrap_result
     def make_or(p, start, end):
         left, right = p
+        if isinstance(right, TypedValue):
+            left, right = right, left
+        if isinstance(left, TypedValue):
+            if isinstance(right, TypedValue):
+                return TypedValue(type=BoolType, value=left.value or right.value)
+            if not left.value:
+                return right
+            else:
+                return TypedValue(type=BoolType, value=True)
         # todo: can probably optimize for smaller output
         _predicate_replace(left[1], False, right)
         return left
@@ -534,12 +544,24 @@ def parse(
     @__wrap_result
     def make_and(p, start, end):
         left, right = p
+        if isinstance(right, TypedValue):
+            left, right = right, left
+        if isinstance(left, TypedValue):
+            if isinstance(right, TypedValue):
+                return TypedValue(type=BoolType, value=left.value and right.value)
+            if left.value:
+                return right
+            else:
+                return TypedValue(type=BoolType, value=False)
         # todo: can probably optimize for smaller output
         _predicate_replace(left[1], True, right)
         return left
 
     @__wrap_result
     def make_not(p, start, end):
+        if isinstance(p, TypedValue):
+            p.value = not p.value
+            return p
         _predicate_replace(p[1], True, None)
         _predicate_replace(p[1], False, True)
         _predicate_replace(p[1], None, False)
@@ -574,6 +596,13 @@ def parse(
             if table is None:
                 next_ = node
                 next_connector = branch_connector
+            elif isinstance(table, TypedValue):
+                print(table)
+                if table.value:
+                    next_ = node
+                    next_connector = branch_connector
+                else:
+                    continue
             else:
                 next_ = _expand_table(table, node, next_)
                 branch_connector.add_out_edge(next_.connector)
@@ -682,8 +711,8 @@ def parse(
     value = (
         __toktype('INT') >> __int
         | __toktype('FLOAT') >> __float
-        | __tokkw('true') >> __bool
-        | __tokkw('false') >> __bool
+        | __tokkw_keep('true') >> __bool
+        | __tokkw_keep('false') >> __bool
         | __toktype('STRING') >> __string
     )
 
@@ -762,11 +791,14 @@ def parse(
     # not_predicate = NOT predicate0
     not_predicate = __tokkw('not') + predicate0 >> make_not
 
+    # const_predicate = TRUE | FALSE
+    const_predicate = (__tokkw_keep('true') | __tokkw_keep('false')) >> __bool 
+
     # paren_predicate = LPAREN predicate RPAREN
     paren_predicate = __tokop('LPAREN') + predicate + __tokop('RPAREN')
 
-    # predicate0 = in_predicate | not_in_predicate | cmp_predicate | not_predicate | bool_function | paren_predicate
-    predicate0.define(in_predicate | not_in_predicate | cmp_predicate | not_predicate | bool_function | paren_predicate)
+    # predicate0 = in_predicate | not_in_predicate | cmp_predicate | not_predicate | const_predicate | bool_function | paren_predicate
+    predicate0.define(in_predicate | not_in_predicate | cmp_predicate | not_predicate | const_predicate | bool_function | paren_predicate)
 
     # and_predicate = predicate0 AND predicate1
     and_predicate = predicate0 + __tokkw('and') + predicate1 >> make_and
