@@ -67,7 +67,7 @@ def tokenize(string: str) -> List[Token]:
     buffered: List[Token] = []
     space_since_nl = False
     first_non_annotation = False
-    buffering = False
+    buffering = 0
 
     emit_token = lambda tok: (buffered if buffering else tokens).append(tok)
     gen = peekable(t(string))
@@ -97,17 +97,19 @@ def tokenize(string: str) -> List[Token]:
             if pstack:
                 continue
             space_since_nl = False
-            if tokens and tokens[-1].type == 'NL' and not buffering:
+            if tokens and tokens[-1].type == 'NL' and buffering != 2:
                 continue
             x = Token('NL', '', start=x.start, end=x.end)
         elif x.type == 'ID' and x.name == 'entrypoint':
             if space_since_nl:
                 raise LexerError(x.start, 'entrypoint must be unindented')
-            buffering = True
+            buffering = 2
         elif x.type == 'SP':
             space_since_nl = True
             nxt = gen.peek(None)
             next_comment = (nxt is not None and nxt.type == 'COMMENT')
+            if buffering == 1 and not next_comment:
+                buffering = 0
             if tokens and tokens[-1].type == 'NL' and not buffering and not next_comment:
                 indent_diff = __compare_indent(indent[-1], x.name, x.start)
                 if indent_diff < 0:
@@ -130,6 +132,12 @@ def tokenize(string: str) -> List[Token]:
 
             continue
 
+
+        if x.type == 'NL' and buffering:
+            buffering = 1
+        elif buffering == 1:
+            buffering = 0
+
         if x.type != 'INDENT' and tokens and tokens[-1].type == 'NL' and not space_since_nl \
                 and not buffering:
             while len(indent) > 1:
@@ -140,9 +148,6 @@ def tokenize(string: str) -> List[Token]:
                 buffered = []
 
         emit_token(x)
-
-        if x.type == 'NL':
-            buffering = False
 
     if pstack:
         raise LexerError((num_lines + 1, 0), 'unclosed parentheses/brackets')

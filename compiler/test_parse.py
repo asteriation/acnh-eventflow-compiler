@@ -176,6 +176,15 @@ class TestTokenize(unittest.TestCase):
         with self.assertRaises(LexerError):
             tokenize('\nentrypoint e:\n')
 
+    def test_entrypoints5(self):
+        tokens = tokenize('\nentrypoint c:\n # f\nentrypoint d: \n\t\t# f\n\td')
+        token_types = [t.type for t in tokens]
+        expected = [
+                'NL', 'INDENT', 'ID', 'ID', 'COLON', 'NL', 'ID', 'ID', 'COLON',
+                'NL', 'ID', 'NL', 'DEDENT'
+        ]
+        self.assertEqual(token_types, expected)
+
     def test_keyword_start_id(self):
         tokens = tokenize('\nentrypoint_e:\n')
         token_types = [t.type for t in tokens]
