@@ -295,7 +295,7 @@ __type = __wrap_result(lambda n, s, e: Type(type=n))
 
 id_ = __toktype('ID') | __toktype('QUOTE_ID')
 
-def __parse_custom_rule(name: str, s: str) -> Tuple[int, Parser]:
+def __parse_custom_rule(name: str, s: str, prefix_check: List[Tuple[str, Optional]]) -> Tuple[int, Parser]:
     rules = [x.strip() for x in s.split('\n') if x.strip()]
     out = []
     r = re.compile(r'^([A-Z_]+)\s*\(\s*(?:(".*")|([^=]+)\s*(?:\=\s*(.+))?|)\s*\)$')
@@ -319,7 +319,7 @@ def __parse_custom_rule(name: str, s: str) -> Tuple[int, Parser]:
         __string = lambda n: TypedValue(type=StrType, value=n[1:-1])
         return eval(s, locals())
 
-    def make_parser(type_ ,value, param, parse):
+    def make_parser(type_, value, param, parse):
         nonlocal actor_set
         if type_ not in valid_token_types and type_ != 'NULL':
             exit_bad_rule(f'"{type_}" is not a valid token type')
@@ -337,6 +337,7 @@ def __parse_custom_rule(name: str, s: str) -> Tuple[int, Parser]:
                 out.append(skip(a(Token('ID', value)) | a(Token('QUOTE_ID', value))))
             else:
                 out.append(skip(a(Token(type_, value))))
+            return True
         elif not param:
             out.append(skip(some(lambda x: x.type == type_ if type_ != 'ID' else x.type in ('ID', 'QUOTE_ID'))))
         else:
@@ -348,7 +349,7 @@ def __parse_custom_rule(name: str, s: str) -> Tuple[int, Parser]:
 
             if type_ == 'NULL':
                 params[param] = f(None, None)
-                return
+                return False
 
             @__wrap_result
             def inner(t, start, end):
@@ -365,12 +366,23 @@ def __parse_custom_rule(name: str, s: str) -> Tuple[int, Parser]:
                 value_wrapper = __identity
 
             out.append(some(lambda x: x.type == type_ if type_ != 'ID' else x.type in ('ID', 'QUOTE_ID')) >> value_wrapper >> inner)
+        return False
 
+    num_exact_match = 0
+    is_prefix = True
+    i = 0
     for rule in rules:
         m = r.match(rule)
         if m is None:
             exit_bad_rule("Misformatted custom rule")
-        make_parser(*m.groups())
+        type_, value, param, parse = m.groups()
+        if make_parser(type_, value, param, parse):
+            num_exact_match += 1
+        if type_ != 'NULL':
+            if i >= len(prefix_check) or type_ != prefix_check[i][0] or \
+                    (value is not None and eval_(value) != prefix_check[i][1]):
+                is_prefix = False
+            i += 1
 
     if not actor_set:
         exit_bad_rule(".actor never set in custom rule", mark_rule=False)
@@ -385,25 +397,39 @@ def __parse_custom_rule(name: str, s: str) -> Tuple[int, Parser]:
             p.update(t)
         return p
 
-    return len(out), (sum(out[1:], out[0]) >> final)
+    return (len(out), num_exact_match), is_prefix, (sum(out[1:], out[0]) >> final)
 
-def parse_custom_rules(ss: List[Tuple[str, str]]) -> Optional[Parser]:
-    # longest rules first
-    _, parsers = zip(*sorted((__parse_custom_rule(name, s) for name, s in ss if s.strip()), key=lambda x: x[0]))
-    parsers = parsers[::-1]
+def parse_custom_rules(ss: List[Tuple[str, str]], prefix_check: List[Tuple[str, Optional]]) -> Tuple[Optional[Parser], Optional[Parser]]:
+    p = [__parse_custom_rule(name, s, prefix_check) for name, s in ss if s.strip()]
+    pfx = sorted(((key, value) for key, check, value in p if check), key=lambda x: x[0])
+    _, pfx_parsers = zip(*pfx) if pfx else ([], [])
+    reg = sorted(((key, value) for key, check, value in p if not check), key=lambda x: x[0])
+    _, reg_parsers = zip(*reg) if reg else ([], [])
+    pfx_parsers = pfx_parsers[::-1]
+    reg_parsers = reg_parsers[::-1]
 
-    if parsers:
-        final = parsers[0]
-        for parser in parsers[1:]:
-            final = final | parser
-        return final
-    return None
+    pfx_final = None
+    if pfx_parsers:
+        pfx_final = pfx_parsers[0]
+        for parser in pfx_parsers[1:]:
+            pfx_final = pfx_final | parser
+
+    reg_final = None
+    if reg_parsers:
+        reg_final = reg_parsers[0]
+        for parser in reg_parsers[1:]:
+            reg_final = reg_final | parser
+
+    return pfx_final, reg_final
 
 def parse(
     seq: List[Token],
     gen_actor: Callable[[str, str], Actor],
-    custom_action_parser: Optional[Parser]=None,
-    custom_query_parser: Optional[Parser]=None
+    custom_action_parser_pfx: Optional[Parser] = None,
+    custom_action_parser_reg: Optional[Parser] = None,
+    custom_query_parser_op: Optional[Parser] = None,
+    custom_query_parser_pfx: Optional[Parser] = None,
+    custom_query_parser_reg: Optional[Parser] = None
 ) -> Tuple[List[RootNode], List[Actor]]:
     actors: Dict[str, Actor] = {}
     actor_secondary_names, seq = __process_actor_annotations(seq)
@@ -757,24 +783,25 @@ def parse(
         actor_name + __tokop('DOT') + function_name +
         __tokop('LPAREN') + function_params + __tokop('RPAREN')
     )
-    # function = custom_query_parser | base_function | LPAREN function RPAREN
+    # function = custom_query_parser_reg | base_function | custom_query_parser_pfx | LPAREN function RPAREN
     function = forward_decl()
-    if custom_query_parser is not None:
-        function_ = custom_query_parser | base_function
+    if custom_query_parser_reg is not None:
+        function_ = custom_query_parser_reg | base_function
     else:
         function_ = base_function
+    if custom_query_parser_pfx is not None:
+        function_ = function_ | custom_query_parser_pfx
     function_ = function_ | (__tokop('LPAREN') + function + __tokop('RPAREN'))
     function.define(function_)
 
-    # simple_action = base_function NL
-    simple_action = base_function + __tokop('NL') >> make_action
-
-    # action = custom_action_parser | simple_action
-    if custom_action_parser is not None:
-        custom_action_parser = custom_action_parser + __tokop('NL') >> make_action
-        action = custom_action_parser | simple_action
+    # action = (custom_action_parser_reg | base_function | custom_action_parser_pfx) NL
+    if custom_action_parser_reg is not None:
+        action = custom_action_parser_reg | base_function
     else:
-        action = simple_action
+        action = base_function
+    if custom_action_parser_pfx is not None:
+        action = action | custom_action_parser_pfx
+    action = action + __tokop('NL') >> make_action
 
     # __intlist = INT {COMMA INT} [COMMA] | LPAREN __intlist RPAREN
     __intlist = forward_decl()
@@ -798,6 +825,7 @@ def parse(
     predicate0 = forward_decl()
     predicate1 = forward_decl()
     predicate2 = forward_decl()
+    predicate3 = forward_decl()
 
     # bool_function = function
     bool_function = function >> make_bool_function
@@ -820,23 +848,29 @@ def parse(
     # paren_predicate = LPAREN predicate RPAREN
     paren_predicate = __tokop('LPAREN') + predicate + __tokop('RPAREN')
 
-    # predicate0 = in_predicate | not_in_predicate | cmp_predicate | not_predicate | const_predicate | bool_function | paren_predicate
-    predicate0.define(in_predicate | not_in_predicate | cmp_predicate | not_predicate | const_predicate | bool_function | paren_predicate)
+    # predicate0 = not_predicate | const_predicate | bool_function | paren_predicate
+    predicate0.define(not_predicate | const_predicate | bool_function | paren_predicate)
 
-    # and_predicate = predicate0 AND predicate1
-    and_predicate = predicate0 + __tokkw('and') + predicate1 >> make_and
+    # predicate1 = custom_query_parser_op | in_predicate | not_in_predicate | cmp_predicate | predicate0
+    predicate1_ = in_predicate | not_in_predicate | cmp_predicate | predicate0
+    if custom_query_parser_op is not None:
+        predicate1_ = (custom_query_parser_op >> make_bool_function) | predicate1_
+    predicate1.define(predicate1_)
 
-    # predicate1 = and_predicate | predicate0
-    predicate1.define(and_predicate | predicate0)
+    # and_predicate = predicate1 AND predicate2
+    and_predicate = predicate1 + __tokkw('and') + predicate2 >> make_and
 
-    # or_predicate = predicate1 OR predicate2
-    or_predicate = predicate1 + __tokkw('or') + predicate2 >> make_or
+    # predicate2 = and_predicate | predicate1
+    predicate2.define(and_predicate | predicate1)
 
-    # predicate2 = or_predicate | predicate1
-    predicate2.define(or_predicate | predicate1)
+    # or_predicate = predicate2 OR predicate3
+    or_predicate = predicate2 + __tokkw('or') + predicate3 >> make_or
 
-    # predicate = predicate2
-    predicate.define(predicate2)
+    # predicate3 = or_predicate | predicate2
+    predicate3.define(or_predicate | predicate2)
+
+    # predicate = predicate3
+    predicate.define(predicate3)
 
     # if = IF predicate block
     if_ = __tokkw('if') + predicate + block

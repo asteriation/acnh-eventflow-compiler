@@ -37,27 +37,35 @@ def actor_gen_prepare(csvr, version: str) -> Tuple[Callable[[str, str], Actor], 
     queries: List[Tuple[str, List[Param], Type, bool]] = []
     action_rules: List[Tuple[str, str]] = []
     query_rules: List[Tuple[str, str]] = []
+    query_op_rules: List[Tuple[str, str]] = []
 
     # MaxVersion, Type, Name, Parameters[, Return]
     header = next(csvr)
-    maxver_i, type_i, name_i, param_i, return_i, rule_i = (header.index(s) for s in ('MaxVersion', 'Type', 'Name', 'Parameters', 'Return', 'ParseRule'))
+    maxver_i, type_i, name_i, param_i, return_i, rtype_i, rule_i = (header.index(s) for s in ('MaxVersion', 'Type', 'Name', 'Parameters', 'Return', 'ParseType', 'ParseRule'))
     for row in csvr:
+        row = [s.strip() for s in row]
         maxver = row[maxver_i]
         if maxver == 'pseudo' or compare_version(maxver, version) < 0:
             continue
         params = []
-        if row[param_i].strip():
+        if row[param_i]:
             params = [param_str_to_param(p) for p in row[param_i].split(';')]
         if row[type_i] == 'Action':
             actions.append(('EventFlowAction' + row[name_i], params))
-            action_rules.append((row[name_i], row[rule_i].strip()))
+            action_rules.append((row[name_i], row[rule_i]))
         else:
             type_ = row[return_i]
             inverted = False
             if type_ == 'inverted_bool':
                 type_, inverted = 'bool', True
             queries.append(('EventFlowQuery' + row[name_i], params, Type(type_), inverted))
-            query_rules.append((row[name_i], row[rule_i].strip()))
+            if row[rtype_i] == 'function':
+                query_rules.append((row[name_i], row[rule_i]))
+            elif row[rtype_i] == 'predicate':
+                query_op_rules.append((row[name_i], row[rule_i]))
+            elif row[rtype_i]:
+                emit_fatal(f'ParseType for "{row[name_i]}" not recognized: "{row[rtype_i]}"')
+                raise LogFatal()
 
     def inner(name: str, secondary_name: str) -> Actor:
         actor = Actor(name, secondary_name)
@@ -67,9 +75,12 @@ def actor_gen_prepare(csvr, version: str) -> Tuple[Callable[[str, str], Actor], 
             actor.register_query(Query(name, qname, params, rtype, inverted))
         return actor
 
-    return inner, [rule for rule in action_rules if rule], [rule for rule in query_rules if rule]
+    return (inner,
+            [rule for rule in action_rules if rule],
+            [rule for rule in query_rules if rule],
+            [rule for rule in query_op_rules if rule])
 
-def process_file(filename, output_dir, output_name, actor_gen, custom_action_parser, custom_query_parser):
+def process_file(filename, output_dir, output_name, actor_gen, **kwargs):
     init_logger(filename)
 
     if_ = Path(filename)
@@ -87,8 +98,7 @@ def process_file(filename, output_dir, output_name, actor_gen, custom_action_par
     roots, actors = parse(
         tokens,
         actor_gen,
-        custom_action_parser=custom_action_parser,
-        custom_query_parser=custom_query_parser,
+        **kwargs
     )
     nodes: Set[Node] = set()
     entrypoints = set(r.name for r in roots)
@@ -132,10 +142,17 @@ def main():
             emit_fatal(f'cannot open {args.f}')
             raise LogFatal()
         with fcsv.open('rt') as f:
-            actor_gen, action_rules, query_rules = actor_gen_prepare(csv.reader(f), args.version)
+            actor_gen, action_rules, query_rules, query_op_rules = actor_gen_prepare(csv.reader(f), args.version)
 
-        custom_action_parser = parse_custom_rules(action_rules)
-        custom_query_parser = parse_custom_rules(query_rules)
+        function_prefix = [
+            ('ID', None),
+            ('DOT', None),
+            ('ID', None),
+            ('LPAREN', None),
+        ]
+        custom_action_parsers = parse_custom_rules(action_rules, function_prefix)
+        custom_query_parsers = parse_custom_rules(query_rules, function_prefix)
+        custom_query_op_parser = parse_custom_rules(query_op_rules, [])[1]
 
         output_dir = Path('.')
         output_name = None
@@ -152,7 +169,17 @@ def main():
         success = True
         for filename in args.files:
             try:
-                process_file(filename, output_dir, output_name, actor_gen, custom_action_parser, custom_query_parser)
+                process_file(
+                    filename,
+                    output_dir,
+                    output_name,
+                    actor_gen,
+                    custom_action_parser_pfx = custom_action_parsers[0],
+                    custom_action_parser_reg = custom_action_parsers[1],
+                    custom_query_parser_pfx = custom_query_parsers[0],
+                    custom_query_parser_reg = custom_query_parsers[1],
+                    custom_query_parser_op = custom_query_op_parser,
+                )
             except LogError:
                 success = False
             except NoParseError as e:
