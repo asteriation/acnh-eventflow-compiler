@@ -44,8 +44,8 @@ __tokens = [
             (?:
                 [A-Za-z0-9_\-]*[A-Za-z0-9]
                 | [A-Za-z0-9]*)
-        | `(?:\\.|[^`\\])*`
         ''', re.VERBOSE)),
+    ('QUOTE_ID', (r'`(?:\\.|[^`\\])*`',)),
     ('FLOAT', (r'[+-]?[ \t]*(?:\d+\.\d*|\d*\.\d+)',)), # todo: fix this
     ('INT', (r'[+-]?[ \t]*\d+',)), # todo: hex
     ('STRING', (r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'',)),
@@ -293,12 +293,12 @@ __string = __wrap_result(lambda n, s, e: TypedValue(type=StrType, value=eval(n))
 __identifier = __wrap_result(lambda n, s, e: TypedValue(type=StrType, value=swap_chars(eval(swap_chars(n, '`', '"')), '`', '"') if n[0] == '`' else n))
 __type = __wrap_result(lambda n, s, e: Type(type=n))
 
-id_ = __toktype('ID')
+id_ = __toktype('ID') | __toktype('QUOTE_ID')
 
 def __parse_custom_rule(name: str, s: str) -> Tuple[int, Parser]:
     rules = [x.strip() for x in s.split('\n') if x.strip()]
     out = []
-    r = re.compile(r'^([A-Z]+)\s*\(\s*(?:(".*")|([^=]+)\s*(?:\=\s*(.+))?|)\s*\)$')
+    r = re.compile(r'^([A-Z_]+)\s*\(\s*(?:(".*")|([^=]+)\s*(?:\=\s*(.+))?|)\s*\)$')
     valid_token_types = set(t for t, m in __tokens)
 
     def exit_bad_rule(message, mark_rule=True) -> NoReturn:
@@ -333,9 +333,12 @@ def __parse_custom_rule(name: str, s: str) -> Tuple[int, Parser]:
                 value = eval_(value)
             except:
                 exit_bad_rule("Failed to parse custom rule value check")
-            out.append(skip(a(Token(type_, value))))
+            if type_ == 'ID':
+                out.append(skip(a(Token('ID', value)) | a(Token('QUOTE_ID', value))))
+            else:
+                out.append(skip(a(Token(type_, value))))
         elif not param:
-            out.append(skip(some(lambda x: x.type == type_)))
+            out.append(skip(some(lambda x: x.type == type_ if type_ != 'ID' else x.type in ('ID', 'QUOTE_ID'))))
         else:
             parse = parse or '__value'
             try:
@@ -361,7 +364,7 @@ def __parse_custom_rule(name: str, s: str) -> Tuple[int, Parser]:
             if param[0] == '.':
                 value_wrapper = __identity
 
-            out.append(some(lambda x: x.type == type_) >> value_wrapper >> inner)
+            out.append(some(lambda x: x.type == type_ if type_ != 'ID' else x.type in ('ID', 'QUOTE_ID')) >> value_wrapper >> inner)
 
     for rule in rules:
         m = r.match(rule)
@@ -752,7 +755,7 @@ def parse(
     # function = custom_query_parser | base_function | LPAREN function RPAREN
     function = forward_decl()
     if custom_query_parser is not None:
-        function_ = base_function | custom_query_parser
+        function_ = custom_query_parser | base_function
     else:
         function_ = base_function
     function_ = function_ | (__tokop('LPAREN') + function + __tokop('RPAREN'))
