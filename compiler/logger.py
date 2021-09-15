@@ -40,12 +40,12 @@ def log(level, message: str,
         print_source: bool = True) -> None:
     if not end:
         end = start
-    if start:
-        message = f'{start[0]}:{start[1]}: {message}'
-    else:
-        message = f' {message}'
     if message not in _sent_messages:
         _sent_messages.add(message)
+        if start:
+            message = f'{start[0]}:{start[1]}: {message}'
+        else:
+            message = f' {message}'
         LOG.log(level, message)
         if print_source and start and  1 <= start[0] <= len(_file_contents) and 1 <= start[1] <= len(_file_contents[start[0] - 1]):
             assert end is not None
