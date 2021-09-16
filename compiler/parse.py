@@ -204,10 +204,16 @@ def __collapse_connectors(root: RootNode) -> None:
     for node in find_postorder(root):
         for onode in node.out_edges:
             if onode in remap:
-                node.reroute_out_edge(onode, remap[onode])
+                if remap[onode] is not None:
+                    node.reroute_out_edge(onode, remap[onode])
+                else:
+                    node.del_out_edge(onode)
         if isinstance(node, ConnectorNode):
-            assert len(node.out_edges) == 1
-            remap[node] = node.out_edges[0]
+            if len(node.out_edges) == 1:
+                remap[node] = node.out_edges[0]
+            else:
+                # connector to nowhere - end of a fork branch
+                remap[node] = None
 
 def __replace_node(root: Node, replace: Node, replacement: Optional[Node]) -> None:
     for node in find_postorder(root):
