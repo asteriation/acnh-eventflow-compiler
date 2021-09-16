@@ -242,8 +242,8 @@ def __process_local_calls(roots: List[RootNode], local_roots: Dict[str, RootNode
             exported_roots[name] = local_roots[name]
             del local_roots[name]
 
+    reroutes = {}
     for root in roots:
-        reroutes = {}
         for node in find_postorder(root):
             if isinstance(node, SubflowNode) and node.ns == '':
                 tail_call = (len(node.out_edges) == 1 and node.out_edges[0] is TerminalNode)
@@ -252,8 +252,26 @@ def __process_local_calls(roots: List[RootNode], local_roots: Dict[str, RootNode
                 elif tail_call: # TODO expose as flag, this makes decompile ugly
                     reroutes[node] = exported_roots[node.called_root_name].out_edges[0]
 
-        for old, new in reroutes.items():
-            __replace_node(root, old, new)
+    changed = True
+    while changed:
+        changed = False
+        for from_, to in list(reroutes.items()):
+            if to in reroutes:
+                reroutes[from_] = reroutes[to]
+                changed = True
+
+    for root in roots:
+        s = [root]
+        added = set()
+        while s:
+            node = s.pop()
+            for child in list(node.out_edges):
+                if child in reroutes:
+                    node.reroute_out_edge(child, reroutes[child])
+            for child in node.out_edges:
+                if child not in added:
+                    s.append(child)
+                    added.add(child)
 
 def __flatten_helper(lst: Iterable[Any]) -> Generator[Any, None, None]:
     for x in lst:
