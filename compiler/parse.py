@@ -497,6 +497,10 @@ def parse(
         query_name, query, pdict, _ = check_function(p, 'query', start, end)
         sw = SwitchNode(f'Event{next_id()}', query, pdict)
         entrypoints = []
+        enum_values = {}
+        if query.rv.type.startswith('enum['):
+            enum_values_list = query.rv.type[5:-1].split(',')
+            enum_values = {v.strip(): i for i, v in enumerate(enum_values_list)}
         for values, block in cases:
             eps, node, connector = block
             entrypoints.extend(eps)
@@ -505,6 +509,14 @@ def parse(
             connector.add_out_edge(sw.connector)
 
             for value in values:
+                if isinstance(value, str):
+                    if not enum_values:
+                        emit_error(f'Query "{query.name}" does not return an enum', start, end)
+                        raise LogError()
+                    if value not in enum_values:
+                        emit_error(f'Enum "{value}" is not a valid return value of "{query.name}"', start, end)
+                        raise LogError()
+                    value = enum_values[value]
                 sw.add_case(node, value)
 
         num_values = _get_query_num_values(query, start, end)
@@ -538,7 +550,19 @@ def parse(
         num_values = _get_query_num_values(query, start, end)
         matched = set()
         unmatched = set(range(num_values))
+        enum_values = {}
+        if query.rv.type.startswith('enum['):
+            enum_values_list = query.rv.type[5:-1].split(',')
+            enum_values = {v.strip(): i for i, v in enumerate(enum_values_list)}
         for value in values:
+            if isinstance(value.value, str):
+                if not enum_values:
+                    emit_error(f'Query "{query.name}" does not return an enum', start, end)
+                    raise LogError()
+                if value.value not in enum_values:
+                    emit_error(f'Enum "{value.value}" is not a valid return value of "{query.name}"', start, end)
+                    raise LogError()
+                value.value = enum_values[value.value]
             if 0 > value.value or num_values <= value.value:
                 emit_warning('{value.value} never returned by {query_name}, ignored', start, end)
                 continue
@@ -553,6 +577,16 @@ def parse(
         p, op, value = p[:-2], p[-2], p[-1]
         query_name, query, pdict, _ = check_function(p, 'query', start, end)
         num_values = _get_query_num_values(query, start, end)
+        if isinstance(value.value, str):
+            if query.rv.type.startswith('enum['):
+                enum_values_list = query.rv.type[5:-1].split(',')
+                value.value = enum_values_list.index(value.value)
+                if value.value == -1:
+                    emit_error(f'Enum "{value.value}" is not a valid return value of "{query.name}"', start, end)
+                    raise LogError()
+            else:
+                emit_error(f'Query "{query.name}" does not return an enum', start, end)
+                raise LogError()
         if op == '==' or op == '!=':
             matched = {value.value} if 0 <= value.value < num_values else set()
             unmatched = set(i for i in range(num_values) if i != value.value)
@@ -803,9 +837,12 @@ def parse(
         action = action | custom_action_parser_pfx
     action = action + __tokop('NL') >> make_action
 
-    # __intlist = INT {COMMA INT} [COMMA] | LPAREN __intlist RPAREN
+    # int_or_enum = INT | QUOTE_ID
+    int_or_enum = (__toktype('INT') >> __int) |  (__toktype('QUOTE_ID') >> __identifier)
+
+    # __intlist = int_or_enum {COMMA int_or_enum} [COMMA] | LPAREN __intlist RPAREN
     __intlist = forward_decl()
-    __intlist.define(((__toktype('INT') >> __int) + many(__tokop('COMMA') + (__toktype('INT') >> __int)) + maybe(__tokop('COMMA')) >> __make_array) | \
+    __intlist.define((int_or_enum + many(__tokop('COMMA') + int_or_enum) + maybe(__tokop('COMMA')) >> __make_array) | \
             __tokop('LPAREN') + __intlist + __tokop('RPAREN'))
 
     # case = CASE __intlist block
@@ -837,7 +874,7 @@ def parse(
     not_in_predicate = function + __tokkw('not') + __tokkw('in') + __intlist >> make_in >> make_not
 
     # cmp_predicate = function CMP INT
-    cmp_predicate = function + __toktype('CMP') + (__toktype('INT') >> __int) >> make_cmp
+    cmp_predicate = function + __toktype('CMP') + int_or_enum >> make_cmp
 
     # not_predicate = NOT predicate0
     not_predicate = __tokkw('not') + predicate0 >> make_not
