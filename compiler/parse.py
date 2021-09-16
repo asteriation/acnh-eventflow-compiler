@@ -465,7 +465,7 @@ def parse(
             try:
                 pdict = function.prepare_param_dict(params)
             except AssertionError as e:
-                emit_error(e.message, start, end)
+                emit_error(str(e), start, end)
                 raise LogError()
         return function_name, function, pdict, negated
 
