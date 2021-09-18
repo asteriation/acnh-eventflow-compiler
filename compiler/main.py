@@ -32,7 +32,7 @@ def compare_version(v1: str, v2: str) -> int:
         return 1
     return 0
 
-def actor_gen_prepare(csvr, version: str) -> Tuple[Callable[[str, str], Actor], List[Tuple[str, str]], List[Tuple[str, str]]]:
+def actor_gen_prepare(csvr, version: str) -> Tuple[Callable[[str, str], Actor], List[Tuple[str, str]], List[Tuple[str, str]], List[Tuple[str, str]]]:
     actions: List[Tuple[str, List[Param]]] = []
     queries: List[Tuple[str, List[Param], Type, bool]] = []
     action_rules: List[Tuple[str, str]] = []

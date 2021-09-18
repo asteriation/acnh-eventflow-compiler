@@ -202,13 +202,14 @@ def __wrap_result(f):
     return inner
 
 def __collapse_connectors(root: RootNode) -> None:
-    remap: Dict[Node, Node] = {}
+    remap: Dict[Node, Optional[Node]] = {}
 
     for node in find_postorder(root):
         for onode in node.out_edges:
             if onode in remap:
-                if remap[onode] is not None:
-                    node.reroute_out_edge(onode, remap[onode])
+                rm = remap[onode]
+                if rm is not None:
+                    node.reroute_out_edge(onode, rm)
                 else:
                     node.del_out_edge(onode)
         if isinstance(node, ConnectorNode):
@@ -227,7 +228,7 @@ def __replace_node(root: Node, replace: Node, replacement: Optional[Node]) -> No
                 node.reroute_out_edge(replace, replacement)
 
 def __process_local_calls(roots: List[RootNode], local_roots: Dict[str, RootNode], exported_roots: Dict[str, RootNode]):
-    post_calls = {}
+    post_calls: Dict[str, Set[Node]] = {}
     for root in roots:
         for node in find_postorder(root):
             if isinstance(node, SubflowNode):
@@ -267,7 +268,7 @@ def __process_local_calls(roots: List[RootNode], local_roots: Dict[str, RootNode
             exported_roots[name] = local_roots[name]
             del local_roots[name]
 
-    reroutes = {}
+    reroutes: Dict[SubflowNode, Node] = {}
     for root in roots:
         for node in find_postorder(root):
             if isinstance(node, SubflowNode) and node.ns == '':
@@ -283,16 +284,17 @@ def __process_local_calls(roots: List[RootNode], local_roots: Dict[str, RootNode
         changed = False
         for from_, to in list(reroutes.items()):
             if to in reroutes:
+                assert isinstance(to, SubflowNode)
                 reroutes[from_] = reroutes[to]
                 changed = True
 
     for root in roots:
-        s = [root]
+        s: List[Node] = [root]
         added = set()
         while s:
             node = s.pop()
             for child in list(node.out_edges):
-                if child in reroutes:
+                if isinstance(child, SubflowNode) and child in reroutes:
                     node.reroute_out_edge(child, reroutes[child])
             for child in node.out_edges:
                 if child not in added:
@@ -309,7 +311,7 @@ def __flatten_helper(lst: Iterable[Any]) -> Generator[Any, None, None]:
 def __flatten(lst: Sequence[Any]) -> List[Any]:
     return list(__flatten_helper(lst))
 
-__toktype = lambda t: some(lambda x: x.type == t)
+__toktype = lambda t: some(lambda x: x.type == t) # type: ignore
 __tokop = lambda typ: skip(some(lambda x: x.type == typ))
 __tokkw = lambda name: skip(a(Token('ID', name)))
 __tokkw_keep = lambda name: a(Token('ID', name))
@@ -340,7 +342,7 @@ __type = __wrap_result(lambda n, s, e: Type(type=n))
 
 id_ = __toktype('ID') | __toktype('QUOTE_ID')
 
-def __parse_custom_rule(name: str, s: str, prefix_check: List[Tuple[str, Optional]]) -> Tuple[int, Parser]:
+def __parse_custom_rule(name: str, s: str, prefix_check: List[Tuple[str, Optional[Any]]]) -> Tuple[int, bool, Parser]:
     rules = [x.strip() for x in s.split('\n') if x.strip()]
     out = []
     r = re.compile(r'^([A-Z_]+)\s*\(\s*(?:(".*")|([^=]+)\s*(?:\=\s*(.+))?|)\s*\)$')
@@ -442,9 +444,9 @@ def __parse_custom_rule(name: str, s: str, prefix_check: List[Tuple[str, Optiona
             p.update(t)
         return p
 
-    return (len(out), num_exact_match), is_prefix, (sum(out[1:], out[0]) >> final)
+    return (len(out), num_exact_match), is_prefix, (sum(out[1:], out[0]) >> final) # type: ignore
 
-def parse_custom_rules(ss: List[Tuple[str, str]], prefix_check: List[Tuple[str, Optional]]) -> Tuple[Optional[Parser], Optional[Parser]]:
+def parse_custom_rules(ss: List[Tuple[str, str]], prefix_check: List[Tuple[str, Optional[Any]]]) -> Tuple[Optional[Parser], Optional[Parser]]:
     p = [__parse_custom_rule(name, s, prefix_check) for name, s in ss if s.strip()]
     pfx = sorted(((key, value) for key, check, value in p if check), key=lambda x: x[0])
     _, pfx_parsers = zip(*pfx) if pfx else ([], [])
