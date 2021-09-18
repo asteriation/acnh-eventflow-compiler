@@ -1,4 +1,7 @@
 RootNode[name=Root, vardefs=[], out_edges=[Event0]]
+RootNode[name=local_0p, vardefs=[], out_edges=[]]
+RootNode[name=local_1p, vardefs=[RootNode.VarDef(name='Param', type=Type(type='int'), initial_value=0)], out_edges=[]]
+RootNode[name=local_2p, vardefs=[RootNode.VarDef(name='Param', type=Type(type='float'), initial_value=0.0), RootNode.VarDef(name='X', type=Type(type='str'), initial_value='')], out_edges=[]]
 SubflowNode[name=Event0, ns=, called_root_name=local_0p, params={}, out_edges=[Event1]]
 SubflowNode[name=Event1, ns=, called_root_name=local_1p, params={'Param': TypedValue(type=Type(type='int'), value=4)}, out_edges=[Event2]]
 SubflowNode[name=Event2, ns=, called_root_name=local_2p, params={'Param': TypedValue(type=Type(type='float'), value=4.3), 'X': TypedValue(type=Type(type='str'), value='123')}, out_edges=[Event3]]

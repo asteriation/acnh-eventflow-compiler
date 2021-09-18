@@ -6,3 +6,12 @@ flow Root():
     run non::local_1p(Param=4)
     run non::local_2p(Param=4.3, X='123')
     return
+
+flow local_0p():
+    pass
+
+flow local_1p(Param: int = 0):
+    pass
+
+flow local_2p(Param: float = 0.0, X: str = ''):
+    pass

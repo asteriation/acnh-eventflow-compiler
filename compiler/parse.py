@@ -253,7 +253,8 @@ def __process_local_calls(roots: List[RootNode], local_roots: Dict[str, RootNode
                             emit_error(f'{node.called_root_name} expects parameter "{vardef.name}" to be of type {vardef.type} but received {param.type} instead')
                             raise LogError()
                 for param in node.params.values():
-                    param.type = ArgumentType
+                    if isinstance(param.value, Argument):
+                        param.type = ArgumentType
 
     for name, root in list(local_roots.items()):
         if name not in post_calls:
