@@ -69,10 +69,13 @@ def tokenize(string: str) -> List[Token]:
     emit_token = lambda tok: (buffered if buffering else tokens).append(tok)
     gen = peekable(t(string))
     for x in gen:
+        assert x.start is not None
+        assert x.end is not None
+        start, end = x.start, x.end
         if x.type != 'ANNOTATION':
             first_non_annotation = True
         if first_non_annotation and x.type == 'ANNOTATION':
-            raise LexerError(x.start, "unexpected '@' - annotations must be at the top of the file")
+            raise LexerError(start, "unexpected '@' - annotations must be at the top of the file")
 
         if x.type == 'COMMENT':
             continue
@@ -80,26 +83,26 @@ def tokenize(string: str) -> List[Token]:
             pstack.append(x)
         elif x.type == 'RPAREN':
             if not pstack:
-                raise LexerError(x.start, 'no parentheses to close')
+                raise LexerError(start, 'no parentheses to close')
             if pstack.pop().type != 'LPAREN':
-                raise LexerError(x.start, "expecting ']' but got ')'")
+                raise LexerError(start, "expecting ']' but got ')'")
         elif x.type == 'LSQUARE':
             pstack.append(x)
         elif x.type == 'RSQUARE':
             if not pstack:
-                raise LexerError(x.start, 'no bracket to close')
+                raise LexerError(start, 'no bracket to close')
             if pstack.pop().type != 'LSQUARE':
-                raise LexerError(x.start, "expecting ')' but got ']'")
+                raise LexerError(start, "expecting ')' but got ']'")
         elif x.type == 'NL':
             if pstack:
                 continue
             space_since_nl = False
             if tokens and tokens[-1].type == 'NL' and buffering != 2:
                 continue
-            x = Token('NL', '', start=x.start, end=x.end)
+            x = Token('NL', '', start=start, end=end)
         elif x.type == 'ID' and x.name == 'entrypoint':
             if space_since_nl:
-                raise LexerError(x.start, 'entrypoint must be unindented')
+                raise LexerError(start, 'entrypoint must be unindented')
             buffering = 2
         elif x.type == 'SP':
             space_since_nl = True
@@ -108,7 +111,7 @@ def tokenize(string: str) -> List[Token]:
             if buffering == 1 and not next_comment:
                 buffering = 0
             if tokens and tokens[-1].type == 'NL' and not buffering and not next_comment:
-                indent_diff = __compare_indent(indent[-1], x.name, x.start)
+                indent_diff = __compare_indent(indent[-1], x.name, start)
                 if indent_diff < 0:
                     found = False
                     while indent:
@@ -116,12 +119,12 @@ def tokenize(string: str) -> List[Token]:
                         if s == x.name:
                             indent.append(s)
                             break
-                        emit_token(Token('DEDENT', '', start=x.start, end=x.end))
+                        emit_token(Token('DEDENT', '', start=start, end=end))
                     if not indent:
-                        raise LexerError(x.end, 'dedent to unknown level')
+                        raise LexerError(end, 'dedent to unknown level')
                 elif indent_diff > 0:
                     indent.append(x.name)
-                    emit_token(Token('INDENT', '', start=x.start, end=x.end))
+                    emit_token(Token('INDENT', '', start=start, end=end))
 
             if not buffering and buffered:
                 tokens.extend(buffered)
@@ -139,7 +142,7 @@ def tokenize(string: str) -> List[Token]:
                 and not buffering:
             while len(indent) > 1:
                 s = indent.pop()
-                emit_token(Token('DEDENT', '', start=x.start, end=x.end))
+                emit_token(Token('DEDENT', '', start=start, end=end))
             if not buffering and buffered:
                 tokens.extend(buffered)
                 buffered = []
