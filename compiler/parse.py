@@ -337,10 +337,10 @@ def __parse_custom_rule(name: str, s: str, prefix_check: List[Tuple[str, Optiona
     params = {'.name': name, '.negated': False}
 
     def eval_(s):
-        __int = lambda n: TypedValue(type=IntType, value=int(n))
-        __float = lambda n: TypedValue(type=FloatType, value=float(n))
-        __bool = lambda n: TypedValue(type=BoolType, value={'false': False, 'true': True}[n])
-        __string = lambda n: TypedValue(type=StrType, value=n[1:-1])
+        __int = lambda n: TypedValue(type=IntType, value=int(n.value if isinstance(n, TypedValue) else n))
+        __float = lambda n: TypedValue(type=FloatType, value=float(n.value if isinstance(n, TypedValue) else n))
+        __bool = lambda n: TypedValue(type=BoolType, value={'false': False, 'true': True}[n.value if isinstance(n, TypedValue) else n])
+        __string = lambda n: TypedValue(type=StrType, value=(n.value if isinstance(n, TypedValue) else n)[1:-1])
         return eval(s, locals())
 
     def make_parser(type_, value, param, parse):
