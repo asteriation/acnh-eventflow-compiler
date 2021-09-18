@@ -123,28 +123,8 @@ class TestTokenize(unittest.TestCase):
             Token('ID', 'abc_d0-3'),
             Token('NL', '')
         ])
-        self.assertEqual(tokenize('0ab34'), [
-            Token('ID', '0ab34'),
-            Token('NL', '')
-        ])
-        self.assertEqual(tokenize('013-34'), [
-            Token('ID', '013-34'),
-            Token('NL', '')
-        ])
-        self.assertNotEqual(tokenize('01334'), [
-            Token('ID', '01334'),
-            Token('NL', '')
-        ])
-        self.assertEqual(tokenize('01-a'), [
-            Token('ID', '01-a'),
-            Token('NL', '')
-        ])
-        self.assertEqual(tokenize('01A_B_C'), [
-            Token('ID', '01A_B_C'),
-            Token('NL', '')
-        ])
         self.assertEqual(tokenize('`1.233 444\\` ee`'), [
-            Token('ID', '`1.233 444\\` ee`'),
+            Token('QUOTE_ID', '`1.233 444\\` ee`'),
             Token('NL', '')
         ])
         with self.assertRaises(LexerError):
