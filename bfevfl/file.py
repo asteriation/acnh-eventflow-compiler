@@ -70,14 +70,17 @@ class File(ContainerBlock):
                 pooled_strings.add(n.called_root_name)
                 # keys are in pool, but values are stored in place
                 pooled_strings.update(n.params.keys())
+            elif isinstance(n, RootNode):
+                for vardef in n.vardefs:
+                    pooled_strings.add(vardef.name)
         for actor in actors:
             add_actor = False
-            for n, a in actor.actions.items():
+            for _, a in actor.actions.items():
                 if a.used:
                     add_actor = True
                     pooled_strings.add(a.name)
                     pooled_strings.update(p.name for p in a.params)
-            for n, q in actor.queries.items():
+            for _, q in actor.queries.items():
                 if q.used:
                     add_actor = True
                     pooled_strings.add(q.name)

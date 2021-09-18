@@ -23,6 +23,7 @@ class Type:
     def __str__(self) -> str:
         return self.type
 
+AnyType = Type('any')
 BoolType = Type('bool')
 FloatType = Type('float')
 IntType = Type('int')

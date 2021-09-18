@@ -42,7 +42,7 @@ class RootNode(Node):
     @dataclass
     class VarDef:
         name: str
-        type_: Type
+        type: Type
         initial_value: Union[int, bool, float]
 
     def __init__(self, name: str, local: bool = False, vardefs: List[VarDef] = []) -> None:

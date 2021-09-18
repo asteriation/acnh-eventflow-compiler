@@ -12,7 +12,7 @@ from more_itertools import peekable
 from compiler.logger import emit_info, emit_warning, emit_error, emit_fatal, LogError, LogFatal
 from compiler.util import find_postorder
 
-from bfevfl.datatype import BoolType, FloatType, IntType, StrType, Type, TypedValue
+from bfevfl.datatype import AnyType, Argument, ArgumentType, BoolType, FloatType, IntType, StrType, Type, TypedValue
 from bfevfl.actors import Param, Action, Actor
 from bfevfl.nodes import (Node, RootNode, ActionNode, SwitchNode, JoinNode, ForkNode,
         SubflowNode, TerminalNode, ConnectorNode)
@@ -227,13 +227,29 @@ def __process_local_calls(roots: List[RootNode], local_roots: Dict[str, RootNode
     post_calls = {}
     for root in roots:
         for node in find_postorder(root):
-            if isinstance(node, SubflowNode) and node.ns == '':
-                if node.called_root_name not in exported_roots and node.called_root_name not in local_roots:
-                    emit_warning(f'{node.called_root_name} called but not defined')
-                if node.out_edges and node.called_root_name in local_roots:
-                    assert len(node.out_edges) == 1
-                    post_calls[node.called_root_name] = post_calls.get(node.called_root_name, set())
-                    post_calls[node.called_root_name].add(node.out_edges[0])
+            if isinstance(node, SubflowNode):
+                if node.ns == '':
+                    if node.called_root_name not in exported_roots and node.called_root_name not in local_roots:
+                        emit_warning(f'{node.called_root_name} called but not defined')
+                    if node.out_edges and node.called_root_name in local_roots:
+                        assert len(node.out_edges) == 1
+                        post_calls[node.called_root_name] = post_calls.get(node.called_root_name, set())
+                        post_calls[node.called_root_name].add(node.out_edges[0])
+
+                    called_node = local_roots[node.called_root_name] if node.called_root_name in local_roots else exported_roots[node.called_root_name]
+                    if len(called_node.vardefs) != len(node.params):
+                        emit_error(f'{node.called_root_name} expects {len(called_node.vardefs)} parameters but received {len(node.params)}')
+                        raise LogError()
+                    for vardef in called_node.vardefs:
+                        if vardef.name not in node.params:
+                            emit_error(f'{node.called_root_name} expects parameter "{vardef.name}" of type {vardef.type}')
+                            raise LogError()
+                        param = node.params[vardef.name]
+                        if param.type != vardef.type:
+                            emit_error(f'{node.called_root_name} expects parameter "{vardef.name}" to be of type {vardef.type} but received {param.type} instead')
+                            raise LogError()
+                for param in node.params.values():
+                    param.type = ArgumentType
 
     for name, root in list(local_roots.items()):
         if name not in post_calls:
@@ -256,6 +272,7 @@ def __process_local_calls(roots: List[RootNode], local_roots: Dict[str, RootNode
                 if node.called_root_name in local_roots:
                     reroutes[node] = local_roots[node.called_root_name].out_edges[0]
                 elif tail_call: # TODO expose as flag, this makes decompile ugly
+                    # TODO fix mutual recursive case when turned off
                     reroutes[node] = exported_roots[node.called_root_name].out_edges[0]
 
     changed = True
@@ -315,6 +332,7 @@ __float = __wrap_result(lambda n, s, e: TypedValue(type=FloatType, value=float(n
 __bool = __wrap_result(lambda n, s, e: TypedValue(type=BoolType, value={'false': False, 'true': True}[n]))
 __string = __wrap_result(lambda n, s, e: TypedValue(type=StrType, value=eval(n)))
 __identifier = __wrap_result(lambda n, s, e: TypedValue(type=StrType, value=swap_chars(eval(swap_chars(n, '`', '"')), '`', '"') if n[0] == '`' else n))
+__argument = __wrap_result(lambda n, s, e: TypedValue(type=AnyType, value=Argument(swap_chars(eval(swap_chars(n, '`', '"')), '`', '"') if n[0] == '`' else n)))
 __type = __wrap_result(lambda n, s, e: Type(type=n))
 
 id_ = __toktype('ID') | __toktype('QUOTE_ID')
@@ -752,13 +770,56 @@ def parse(
         return (), (TerminalNode,)
 
     @__wrap_result
+    def make_param(n, start, end):
+        return n
+
+    def verify_params(name, root, params_list):
+        for param, type_, value in params_list:
+            if type_ != value.type:
+                emit_error(f'variable definition for {param} in {name} is of type {type_} but has default value of type {value.type}')
+                raise LogError()
+        params = {param: type_ for param, type_, value in params_list}
+        for node in find_postorder(root):
+            if isinstance(node, (ActionNode, SwitchNode)):
+                for param, value in node.params.items():
+                    if isinstance(value.value, Argument):
+                        if value.value not in params:
+                            emit_error(f'variable {value.value} not defined in flow {name}')
+                            raise LogError()
+
+                        expected_type = params[value.value]
+                        actual_type = value.type
+                        if param.startswith('EntryVariableKey'):
+                            if param[16:].startswith('Int_'):
+                                actual_type = IntType
+                            elif param[16:].startswith('Bool_'):
+                                actual_type = BoolType
+                            elif param[16:].startswith('Float_'):
+                                actual_type = FloatType
+                            elif param[16:].startswith('String_'):
+                                actual_type = StringType
+                        else:
+                            value.type = ArgumentType
+
+                        if expected_type != actual_type:
+                            emit_error(f'variable {value.value} has the wrong type, defined to be {expected_type} but used as {actual_type}')
+                            raise LogError()
+
+            if isinstance(node, SubflowNode):
+                for param, value in node.params.items():
+                    if isinstance(value.value, Argument):
+                        if value.value not in params:
+                            emit_error(f'variable {value.value} not defined in flow {name}')
+                            raise LogError()
+                        value.type = params[value.value]
+
+    @__wrap_result
     def make_flow(n, start, end):
         local, name, params, body = n
         entrypoints, body_root, body_connector = body
-        if params:
-            emit_error('vardefs are not implemented yet', start, end)
-            raise LogError()
-        node = RootNode(name, local is not None, [])
+        verify_params(name, body_root, params)
+        vardefs = [RootNode.VarDef(name=n, type=t, initial_value=v.value) for n, t, v in params]
+        node = RootNode(name, local is not None, vardefs)
         node.add_out_edge(body_root)
         body_connector.add_out_edge(TerminalNode)
         return list(entrypoints) + [node]
@@ -814,14 +875,20 @@ def parse(
 
     block = forward_decl()
 
-    # value = INT | STRING | FLOAT | BOOL | ID (todo)
-    value = (
+    # base_value = INT | STRING | FLOAT | BOOL
+    base_value = (
         __toktype('INT') >> __int
         | __toktype('FLOAT') >> __float
         | __tokkw_keep('true') >> __bool
         | __tokkw_keep('false') >> __bool
         | __toktype('STRING') >> __string
     )
+
+    # nonenum_value = base_value | ID
+    nonenum_value = base_value | __toktype('ID') >> __argument
+
+    # value = nonennum_value | QUOTE_ID
+    value = nonenum_value | __toktype('QUOTE_ID') >> __identifier
 
     # pass = PASS NL
     pass_ = (__tokkw('pass') + __tokop('NL')) >> make_none
@@ -956,8 +1023,8 @@ def parse(
     # flow_name = [id COLON COLON] id
     flow_name = maybe(id_ + __tokop('COLON') + __tokop('COLON')) + id_
 
-    # subflow_param = id ASSIGN value
-    subflow_param = id_ + __tokop('ASSIGN') + value >> make_subflow_param
+    # subflow_param = id ASSIGN nonenum_value
+    subflow_param = id_ + __tokop('ASSIGN') + nonenum_value >> make_subflow_param
 
     # subflow_params = [subflow_param { COMMA subflow_param }]
     subflow_params = maybe(subflow_param + many(__tokop('COMMA') + subflow_param)) >> __make_array
@@ -986,10 +1053,10 @@ def parse(
     block.define(__tokop('COLON') + __tokop('NL') + __tokop('INDENT') + block_body + __tokop('DEDENT'))
 
     # type = INT | FLOAT | STR | BOOL
-    type_atom = __tokkw('int') | __tokkw('float') | __tokkw('str') | __tokkw('bool')
+    type_atom = (__tokkw_keep('int') | __tokkw_keep('float') | __tokkw_keep('str') | __tokkw_keep('bool')) >> __type
 
-    # flow_param = ID COLON TYPE
-    flow_param = id_ + __tokop('COLON') + type_atom >> __type
+    # flow_param = ID COLON TYPE ASSIGN base_value
+    flow_param = id_ + __tokop('COLON') + type_atom + __tokop('ASSIGN') + base_value >> make_param
 
     # flow_params = [flow_param { COMMA flow_param }]
     flow_params = maybe(flow_param + many(__tokop('COMMA') + flow_param)) >> __make_array

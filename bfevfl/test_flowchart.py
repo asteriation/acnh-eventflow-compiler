@@ -12,7 +12,7 @@ from .array import BlockArray, BlockPtrArray, Uint16Array
 from .container import Container
 from .flowchart import (_Actor, _Event, _ActionEvent, _SwitchEvent, _ForkEvent, _JoinEvent,
         _SwitchCase, _SwitchData, _SubflowEvent,
-        _VarDef, _Pad24, _Entrypoint, _FlowchartHeader, Flowchart)
+        _VarDef, _Entrypoint, _FlowchartHeader, Flowchart)
 
 class Test_Actor(unittest.TestCase):
     def setUp(self):
@@ -231,7 +231,7 @@ class Test_VarDef(unittest.TestCase):
 
 class Test_Entrypoint(unittest.TestCase):
     def test_simple(self):
-        ep = _Entrypoint(None, _Pad24(), None, 0x2345)
+        ep = _Entrypoint(None, None, None, 0x2345)
 
         self.assertEqual(ep.get_all_pointers(), [])
         self.assertEqual(ep.prepare_bitstream(),
@@ -241,7 +241,7 @@ class Test_Entrypoint(unittest.TestCase):
     def test_subflow_index(self):
         si = Uint16Array(list(range(10)))
         si.offset = 1289471295
-        ep = _Entrypoint(None, _Pad24(), si, 0x2345)
+        ep = _Entrypoint(None, None, si, 0x2345)
 
         self.assertEqual(ep.get_all_pointers(), [0])
         self.assertEqual(ep.prepare_bitstream(),

@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, NamedTuple, Optional, Union
 
-from .datatype import Type, TypedValue
+from .datatype import Argument, Type, TypedValue
 
 class Param(NamedTuple):
     name: str
     type: Type
 
-class Action:
+class Function:
     def __init__(self, actor_name: str, name: str, params: List[Param]) -> None:
         self.actor_name = actor_name
         self.name = name
@@ -19,6 +19,12 @@ class Action:
         assert len(self.params) == len(params), f'{self.name}: expected {len(self.params)} params, got {len(params)}'
         d = {}
         for param, value in zip(self.params, params):
+            if param.name.startswith('EntryVariableKey'):
+                assert isinstance(value.value, Argument), f'{self.name}: expected variable for {param.name}, got {value.type}'
+                value.type = param.type
+            elif isinstance(value.value, Argument):
+                value.type = param.type
+
             assert param.type == value.type, f'{self.name}: expected {param.type} for {param.name}, got {value.type}'
             d[param.name] = value
 
@@ -31,31 +37,16 @@ class Action:
         name = self.name
         return f'{name}(' + ', '.join(p.name for p in self.params) + ')'
 
-class Query:
+class Action(Function):
+    pass
+
+class Query(Function):
     def __init__(self, actor_name: str, name: str, params: List[Param], rv: Type, inverted: bool = False) -> None:
-        self.actor_name = actor_name
-        self.name = name
-        self.params = params
+        super().__init__(actor_name, name, params)
         self.rv = rv
         self.inverted = inverted
         self.num_values = rv.num_values()
         self.used = False
-
-    def prepare_param_dict(self, params: List[TypedValue]) -> Dict[str, TypedValue]:
-        assert len(self.params) == len(params), f'{self.name}: expected {len(self.params)} params, got {len(params)}'
-        d = {}
-        for param, value in zip(self.params, params):
-            assert param.type == value.type, f'{self.name}: expected {param.type} for {param.name}, got {value.type}'
-            d[param.name] = value
-
-        return d
-
-    def mark_used(self) -> None:
-        self.used = True
-
-    def __str__(self) -> str:
-        name = self.name
-        return f'{name}(' + ', '.join(p.name for p in self.params) + ')'
 
 class Actor:
     def __init__(self, name: str, secondary_name: str = '') -> None:

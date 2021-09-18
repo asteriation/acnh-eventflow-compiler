@@ -194,22 +194,26 @@ class _Pad24(DataBlock):
     def alignment(self) -> int:
         return 8
 
+class _EntrypointVardefData(ContainerBlock):
+    def __init__(self, vardef_names: Dictionary, vardefs: BlockArray[_VarDef]) -> None:
+        super().__init__([vardef_names, vardefs])
+
 # there is a 24-byte padding per entrypoint after SubflowIndexArray, unless
 # the entrypoint has vardefs
-_EntrypointData = Union[BlockArray[_VarDef], _Pad24]
+_EntrypointData = Union[_EntrypointVardefData, _Pad24]
 
 class _Entrypoint(DataBlock):
-    def __init__(self, vardef_names: Optional[Dictionary], vardefs: _EntrypointData,
+    def __init__(self, vardef_names: Optional[Dictionary], vardefs: Optional[BlockArray[_VarDef]],
                  subflow_indices: Optional[Uint16Array], main_index: int) -> None:
         super().__init__(0x1e)
 
         self._add_pointer(0, subflow_indices)
         self._add_pointer(8, vardef_names)
-        self._add_pointer(16, vardefs if isinstance(vardefs, BlockArray) else None)
+        self._add_pointer(16, vardefs)
 
         with self._at_offset(24):
             self.buffer.overwrite(pack('uintle:16', subflow_indices.n if subflow_indices else 0))
-            self.buffer.overwrite(pack('uintle:16', vardefs.n if isinstance(vardefs, BlockArray) else 0))
+            self.buffer.overwrite(pack('uintle:16', vardefs.n if vardefs is not None else 0))
             self.buffer.overwrite(pack('uintle:16', main_index))
 
     def alignment(self) -> int:
@@ -337,15 +341,17 @@ class Flowchart(ContainerBlock):
             si = Uint16Array(entrypoint_calls[entrypoint.name]) or None
 
             vardef_names: Optional[Dictionary] = None
+            vardefs: Optional[BlockArray[_VarDef]] = None
             epdata: _EntrypointData = _Pad24()
             if entrypoint.vardefs:
                 vardef_names = Dictionary([v.name for v in entrypoint.vardefs], pool)
-                epdata = BlockArray[_VarDef]([
-                    _VarDef(TypedValue(v.type_, v.initial_value))
+                vardefs = BlockArray[_VarDef]([
+                    _VarDef(TypedValue(v.type, v.initial_value))
                     for v in entrypoint.vardefs
                 ])
+                epdata = _EntrypointVardefData(vardef_names, vardefs)
             start = event_indices[entrypoint.out_edges[0]] if entrypoint.out_edges else 0xFFFF
-            ep = _Entrypoint(vardef_names, epdata, si, start)
+            ep = _Entrypoint(vardef_names, vardefs, si, start)
 
             entrypoint_names.append(entrypoint.name)
             entrypoints.append(ep)
