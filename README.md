@@ -4,8 +4,9 @@ Tool to compile a readable, code-like format into eventflow flowcharts (bfevfl) 
 
 This project is the counterpart of [acnh-eventflow-decompiler](https://github.com/asteriation/acnh-eventflow-decompiler).
 
-This project is still a work in progress, and currently compiles 560/562 of the decompiled flows
-from v1.11.0.
+This project is still a work in progress, and currently compiles all 562/562 of the decompiled flows
+from v1.11.0, with 448/562 recompiled flows being no larger than the original bfevfl file (364/562
+smaller, 84/562 same size).
 
 ## Usage
 

@@ -808,6 +808,40 @@ def parse(
         return eps, (fork, join)
 
     @__wrap_result
+    def make_while(n, start, end):
+        table, (eps, node, connector) = n
+        next_connector = ConnectorNode(f'Connector{next_id()}')
+        if isinstance(table, TypedValue):
+            if table.value:
+                # while true
+                connector.add_out_edge(node)
+                return eps, (node, connector)
+            else:
+                # while false
+                if eps:
+                    emit_error('entrypoints in while-false not supported', start, end)
+                    raise LogError()
+                return [], (connector, connector)
+        else:
+            next_ = _expand_table(table, node, next_connector)
+            connector.add_out_edge(next_)
+            return eps, (next_, next_connector)
+
+    @__wrap_result
+    def make_do_while(n, start, end):
+        (eps, node, connector), table = n
+        next_connector = ConnectorNode(f'Connector{next_id()}')
+        if isinstance(table, TypedValue):
+            if table.value:
+                # do while true
+                connector.add_out_edge(node)
+            return eps, (node, connector)
+        else:
+            next_ = _expand_table(table, node, next_connector)
+            connector.add_out_edge(next_)
+            return eps, (node, next_connector)
+
+    @__wrap_result
     def make_subflow_param(n, start, end):
         return (n,)
 
@@ -901,10 +935,15 @@ def parse(
             return (eps, connector, connector)
 
         for n1, n2 in zip(block, block[1:] + [connector]):
+            n1_conn = n1
+            if isinstance(n1, tuple):
+                n1, n1_conn = n1
+            if isinstance(n2, tuple):
+                n2, _ = n2
             if isinstance(n1, SwitchNode):
                 n1.connector.add_out_edge(n2)
             else:
-                n1.add_out_edge(n2)
+                n1_conn.add_out_edge(n2)
 
         if ep is not None:
             ep_node = RootNode(ep, True, True, [])
@@ -1064,6 +1103,12 @@ def parse(
     fork = __tokkw('fork') + __tokop('COLON') + __tokop('NL') + \
             __tokop('INDENT') + branches + __tokop('DEDENT') >> make_fork
 
+    # while = WHILE predicate block
+    while_ = __tokkw('while') + predicate + block >> make_while
+
+    # do_while = DO block WHILE predicate NL
+    do_while = __tokkw('do') + block + __tokkw('while') + predicate + __tokop('NL')  >> make_do_while
+
     # flow_name = [id COLON COLON] id
     flow_name = maybe(id_ + __tokop('COLON') + __tokop('COLON')) + id_
 
@@ -1078,8 +1123,8 @@ def parse(
         __tokkw('run') + flow_name + __tokop('LPAREN') + subflow_params + __tokop('RPAREN') + __tokop('NL')
     ) >> make_subflow
 
-    # stmt = action | switch | ifelse | fork | run | pass_ | return | NL
-    stmt = action | switch | ifelse | fork | run | pass_ | return_ | (__tokop('NL') >> make_none)
+    # stmt = action | switch | ifelse | fork | while_ | do_while | run | pass_ | return | NL
+    stmt = action | switch | ifelse | fork | while_ | do_while | run | pass_ | return_ | (__tokop('NL') >> make_none)
 
     # entrypoint = ENTRYPOINT id COLON NL
     entrypoint = __tokkw('entrypoint') + id_ + __tokop('COLON') + __tokop('NL')
