@@ -343,11 +343,12 @@ class Flowchart(ContainerBlock):
             vardef_names: Optional[Dictionary] = None
             vardefs: Optional[BlockArray[_VarDef]] = None
             epdata: _EntrypointData = _Pad24()
-            if entrypoint.vardefs:
-                vardef_names = Dictionary([v.name for v in entrypoint.vardefs], pool)
+            relevant_vardefs = [v for v in entrypoint.vardefs if v.initial_value is not None]
+            if relevant_vardefs:
+                vardef_names = Dictionary([v.name for v in relevant_vardefs], pool)
                 vardefs = BlockArray[_VarDef]([
                     _VarDef(TypedValue(v.type, v.initial_value))
-                    for v in entrypoint.vardefs
+                    for v in relevant_vardefs
                 ])
                 epdata = _EntrypointVardefData(vardef_names, vardefs)
             start = event_indices[entrypoint.out_edges[0]] if entrypoint.out_edges else 0xFFFF

@@ -153,7 +153,7 @@ def tokenize(string: str) -> List[Token]:
         raise LexerError((num_lines + 1, 0), 'unclosed parentheses/brackets')
 
     if buffering or buffered:
-        raise LexerError((num_lines + 1, 0), 'unexpected end of file')
+        raise LexerError((num_lines + 1, 0), 'unexpecte end of file')
 
     while indent[-1]:
         indent.pop()
@@ -241,6 +241,11 @@ def __process_local_calls(roots: List[RootNode], local_roots: Dict[str, RootNode
                         post_calls[node.called_root_name].add(node.out_edges[0])
 
                     called_node = local_roots[node.called_root_name] if node.called_root_name in local_roots else exported_roots[node.called_root_name]
+                    if called_node.entrypoint:
+                        if node.params:
+                            emit_error(f'entrypoint "{node.called_root_node}" should not be called with any parameters')
+                            raise LogError()
+                        continue
                     if len(called_node.vardefs) != len(node.params):
                         emit_error(f'{node.called_root_name} expects {len(called_node.vardefs)} parameters but received {len(node.params)}')
                         raise LogError()
@@ -249,8 +254,16 @@ def __process_local_calls(roots: List[RootNode], local_roots: Dict[str, RootNode
                             emit_error(f'{node.called_root_name} expects parameter "{vardef.name}" of type {vardef.type}')
                             raise LogError()
                         param = node.params[vardef.name]
-                        if param.type != vardef.type:
-                            emit_error(f'{node.called_root_name} expects parameter "{vardef.name}" to be of type {vardef.type} but received {param.type} instead')
+                        param_type = param.type
+                        if param_type == ArgumentType:
+                            vcand = [v.type for v in root.vardefs if v.name == param.value]
+                            if not vcand:
+                                emit_error(f'variable {param.value} not defined')
+                                raise LogError()
+                            param_type = vcand[0]
+
+                        if param_type != vardef.type:
+                            emit_error(f'{node.called_root_name} expects parameter "{vardef.name}" to be of type {vardef.type} but received {param_type} instead')
                             raise LogError()
                 for param in node.params.values():
                     if isinstance(param.value, Argument):
@@ -343,6 +356,18 @@ __type = __wrap_result(lambda n, s, e: Type(type=n))
 
 id_ = __toktype('ID') | __toktype('QUOTE_ID')
 
+__base_value = (
+    __toktype('INT') >> __int
+    | __toktype('FLOAT') >> __float
+    | __tokkw_keep('true') >> __bool
+    | __tokkw_keep('false') >> __bool
+    | __toktype('STRING') >> __string
+)
+
+__nonenum_value = __base_value | __toktype('ID') >> __argument
+
+__value = __nonenum_value | __toktype('QUOTE_ID') >> __identifier
+
 def __parse_custom_rule(name: str, s: str, prefix_check: List[Tuple[str, Optional[Any]]]) -> Tuple[int, bool, Parser]:
     rules = [x.strip() for x in s.split('\n') if x.strip()]
     out = []
@@ -360,22 +385,39 @@ def __parse_custom_rule(name: str, s: str, prefix_check: List[Tuple[str, Optiona
     actor_set = False
     params = {'.name': name, '.negated': False}
 
+    def assert_type(value, type_):
+        if isinstance(value.value, Argument):
+            value.type = type_
+        else:
+            assert value.type == type_, f'expected value of type {type_}, got {value.type}'
+        return value
+
     def eval_(s):
         __int = lambda n: TypedValue(type=IntType, value=int(n.value if isinstance(n, TypedValue) else n))
         __float = lambda n: TypedValue(type=FloatType, value=float(n.value if isinstance(n, TypedValue) else n))
         __bool = lambda n: TypedValue(type=BoolType, value={'false': False, 'true': True}[n.value if isinstance(n, TypedValue) else n])
         __string = lambda n: TypedValue(type=StrType, value=(n.value if isinstance(n, TypedValue) else n)[1:-1])
+        __assert_int = lambda n: assert_type(n, IntType)
+        __assert_float = lambda n: assert_type(n, FloatType)
+        __assert_bool = lambda n: assert_type(n, BoolType)
+        __assert_string = lambda n: assert_type(n, StrType)
         return eval(s, locals())
 
     def make_parser(type_, value, param, parse):
         nonlocal actor_set
-        if type_ not in valid_token_types and type_ != 'NULL':
+        if type_ not in valid_token_types and type_ not in ('NULL', 'VALUE'):
             exit_bad_rule(f'"{type_}" is not a valid token type')
         if param == '.actor':
             actor_set = True
         if type_ == 'NULL':
             if value:
                 exit_bad_rule("NULL token cannot be used with value check")
+        if type_ == 'VALUE':
+            if value:
+                exit_bad_rule("VALUE token cannot be used with value check")
+            if param is None or parse not in ('INT', 'FLOAT', 'BOOL', 'STRING'):
+                exit_bad_rule("VALUE token not of form VALUE(parameter=TYPE)")
+            parse = f'__assert_{parse.lower()}(__value)'
         if value:
             try:
                 value = eval_(value)
@@ -401,7 +443,11 @@ def __parse_custom_rule(name: str, s: str, prefix_check: List[Tuple[str, Optiona
 
             @__wrap_result
             def inner(t, start, end):
-                return {param: f(type_, t)}
+                try:
+                    return {param: f(type_, t)}
+                except Exception as e:
+                    emit_error(str(e), start, end)
+                    raise LogError()
 
             value_wrapper = {
                 'INT': __int,
@@ -413,7 +459,10 @@ def __parse_custom_rule(name: str, s: str, prefix_check: List[Tuple[str, Optiona
             if param[0] == '.':
                 value_wrapper = __identity
 
-            out.append(some(lambda x: x.type == type_ if type_ != 'ID' else x.type in ('ID', 'QUOTE_ID')) >> value_wrapper >> inner)
+            if type_ != 'VALUE':
+                out.append(some(lambda x: x.type == type_ if type_ != 'ID' else x.type in ('ID', 'QUOTE_ID')) >> value_wrapper >> inner)
+            else:
+                out.append(__value >> value_wrapper >> inner)
         return False
 
     num_exact_match = 0
@@ -429,7 +478,8 @@ def __parse_custom_rule(name: str, s: str, prefix_check: List[Tuple[str, Optiona
         if type_ != 'NULL':
             if i >= len(prefix_check) or type_ != prefix_check[i][0] or \
                     (value is not None and eval_(value) != prefix_check[i][1]):
-                is_prefix = False
+                if not (i < len(prefix_check) and type_ == 'VALUE' and prefix_check[i][0] == 'ID'):
+                    is_prefix = False
             i += 1
 
     if not actor_set:
@@ -781,7 +831,7 @@ def parse(
 
     def verify_params(name, root, params_list):
         for param, type_, value in params_list:
-            if type_ != value.type:
+            if value is not None and type_ != value.type:
                 emit_error(f'variable definition for {param} in {name} is of type {type_} but has default value of type {value.type}')
                 raise LogError()
         params = {param: type_ for param, type_, value in params_list}
@@ -824,8 +874,11 @@ def parse(
         local, name, params, body = n
         entrypoints, body_root, body_connector = body
         verify_params(name, body_root, params)
-        vardefs = [RootNode.VarDef(name=n, type=t, initial_value=v.value) for n, t, v in params]
-        node = RootNode(name, local is not None, vardefs)
+        vardefs = [RootNode.VarDef(name=n, type=t, initial_value=v.value if v else None) for n, t, v in params]
+        valueless_vardefs = [RootNode.VarDef(name=n, type=t, initial_value=None) for n, t, v in params]
+        node = RootNode(name, local is not None, False, vardefs)
+        for e in entrypoints:
+            e.vardefs = valueless_vardefs[:]
         node.add_out_edge(body_root)
         body_connector.add_out_edge(TerminalNode)
         return list(entrypoints) + [node]
@@ -842,7 +895,7 @@ def parse(
 
         if not block:
             if ep is not None:
-                ep_node = RootNode(ep, True, [])
+                ep_node = RootNode(ep, True, True, [])
                 ep_node.add_out_edge(connector)
                 eps.append(ep_node)
             return (eps, connector, connector)
@@ -854,7 +907,7 @@ def parse(
                 n1.add_out_edge(n2)
 
         if ep is not None:
-            ep_node = RootNode(ep, True, [])
+            ep_node = RootNode(ep, True, True, [])
             ep_node.add_out_edge(block[0])
             eps.append(ep_node)
 
@@ -881,21 +934,6 @@ def parse(
 
     block = forward_decl()
 
-    # base_value = INT | STRING | FLOAT | BOOL
-    base_value = (
-        __toktype('INT') >> __int
-        | __toktype('FLOAT') >> __float
-        | __tokkw_keep('true') >> __bool
-        | __tokkw_keep('false') >> __bool
-        | __toktype('STRING') >> __string
-    )
-
-    # nonenum_value = base_value | ID
-    nonenum_value = base_value | __toktype('ID') >> __argument
-
-    # value = nonennum_value | QUOTE_ID
-    value = nonenum_value | __toktype('QUOTE_ID') >> __identifier
-
     # pass = PASS NL
     pass_ = (__tokkw('pass') + __tokop('NL')) >> make_none
 
@@ -903,7 +941,7 @@ def parse(
     return_ = (__tokkw('return') + __tokop('NL')) >> make_return
 
     # function_params =  [value { COMMA value }]
-    function_params = maybe(value + many(__tokop('COMMA') + value)) >> __make_array
+    function_params = maybe(__value + many(__tokop('COMMA') + __value)) >> __make_array
 
     # actor_name = id
     actor_name = id_
@@ -1030,7 +1068,7 @@ def parse(
     flow_name = maybe(id_ + __tokop('COLON') + __tokop('COLON')) + id_
 
     # subflow_param = id ASSIGN nonenum_value
-    subflow_param = id_ + __tokop('ASSIGN') + nonenum_value >> make_subflow_param
+    subflow_param = id_ + __tokop('ASSIGN') + __nonenum_value >> make_subflow_param
 
     # subflow_params = [subflow_param { COMMA subflow_param }]
     subflow_params = maybe(subflow_param + many(__tokop('COMMA') + subflow_param)) >> __make_array
@@ -1061,8 +1099,8 @@ def parse(
     # type = INT | FLOAT | STR | BOOL
     type_atom = (__tokkw_keep('int') | __tokkw_keep('float') | __tokkw_keep('str') | __tokkw_keep('bool')) >> __type
 
-    # flow_param = ID COLON TYPE ASSIGN base_value
-    flow_param = id_ + __tokop('COLON') + type_atom + __tokop('ASSIGN') + base_value >> make_param
+    # flow_param = ID COLON TYPE [ASSIGN base_value]
+    flow_param = id_ + __tokop('COLON') + type_atom + maybe(__tokop('ASSIGN') + __base_value) >> make_param
 
     # flow_params = [flow_param { COMMA flow_param }]
     flow_params = maybe(flow_param + many(__tokop('COMMA') + flow_param)) >> __make_array
