@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, NamedTuple, Optional, Union
 
-from .datatype import Argument, Type, TypedValue
+from .datatype import Argument, IntType, StrType, Type, TypedValue
 
 class Param(NamedTuple):
     name: str
@@ -24,9 +24,19 @@ class Function:
                 value.type = param.type
             elif isinstance(value.value, Argument):
                 value.type = param.type
-
-            assert param.type == value.type, f'{self.name}: expected {param.type} for {param.name}, got {value.type}'
-            d[param.name] = value
+            elif param.type.type.startswith('enum['):
+                if value.type == StrType:
+                    fields = {s.strip(): i for i, s in enumerate(param.type.type[5:-1].split(','))}
+                    assert value.value in fields, f'{self.name}: "{value.value}" is not a valid key for the enum type {param.type}'
+                    value = TypedValue(value=fields[value.value], type=IntType)
+                elif value.type == IntType:
+                    assert 0 <= value.value < param.type.num_values(), f'{self.name}: {value.value} is out of bounds for the enum type {param.type}'
+                else:
+                    assert param.type == value.type, f'{self.name}: expected {param.type} for {param.name}, got {value.type}'
+                d[param.name] = value
+            else:
+                assert param.type == value.type, f'{self.name}: expected {param.type} for {param.name}, got {value.type}'
+                d[param.name] = value
 
         return d
 
