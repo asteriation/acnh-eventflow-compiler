@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, NamedTuple, Optional, Union
 
-from .datatype import Argument, IntType, StrType, Type, TypedValue
+from .datatype import Argument, AnyType, IntType, StrType, Type, TypedValue
 
 class Param(NamedTuple):
     name: str
@@ -32,7 +32,11 @@ class Function:
                 elif value.type == IntType:
                     assert 0 <= value.value < param.type.num_values(), f'{self.name}: {value.value} is out of bounds for the enum type {param.type}'
                 else:
-                    assert param.type == value.type, f'{self.name}: expected {param.type} for {param.name}, got {value.type}'
+                    raise AssertionError(f'{self.name}: expected {param.type} for {param.name}, got {value.type}')
+                d[param.name] = value
+                continue
+
+            if param.type == AnyType:
                 d[param.name] = value
             else:
                 assert param.type == value.type, f'{self.name}: expected {param.type} for {param.name}, got {value.type}'
