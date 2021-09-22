@@ -25,10 +25,11 @@ def __compare_indent(base: str, new: str, pos: Tuple[int, int]) -> int:
     raise LexerError(pos, f'mixed tab/space indent')
 
 __tokens = [
-    ('ANNOTATION', (r'@[^\r\n]*\r?\n',)),
+    ('ANNOTATION', (r'@[^@\r\n]*\r?\n',)),
     ('COMMENT', (r'#[^\r\n]*',)),
     ('SP', (r'[ \t]+',)),
     ('NL', (r'[\r\n]+',)),
+    ('ATAT', (r'@@',)),
     ('COLON', (r':',)),
     ('LPAREN', (r'\(',)),
     ('RPAREN', (r'\)',)),
