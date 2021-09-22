@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict, List, NamedTuple, Optional, Union
+from typing import Any, Dict, List, Optional, Union, Tuple
 
 from .datatype import Type, TypedValue
 from .actors import Action, Query
@@ -10,19 +10,24 @@ from .actors import Action, Query
 class Node(ABC):
     def __init__(self, name: str) -> None:
         self.name = name
+        self.in_edges: List[Node] = []
         self.out_edges: List[Node] = []
 
     def add_out_edge(self, dest: Node) -> None:
         if dest not in self.out_edges:
             self.out_edges.append(dest)
+            dest.in_edges.append(self)
 
     def del_out_edge(self, dest: Node) -> None:
         self.out_edges.remove(dest)
+        dest.in_edges.remove(self)
 
     def reroute_out_edge(self, old_dest: Node, new_dest: Node) -> None:
         if old_dest in self.out_edges:
             if new_dest not in self.out_edges:
                 self.out_edges[self.out_edges.index(old_dest)] = new_dest
+                old_dest.in_edges.remove(self)
+                new_dest.in_edges.append(self)
             else:
                 del self.out_edges[self.out_edges.index(old_dest)]
 
@@ -37,6 +42,9 @@ class Node(ABC):
     def get_dot(self) -> str:
         return f'n{id(self)} [label=<<b>{self.name} ({type(self).__name__})</b><br/>{type(self).__name__}>];' + \
                 ''.join(f'n{id(self)} -> n{id(nx)};' for nx in self.out_edges)
+
+    def get_data(self) -> Tuple[Any]:
+        return tuple()
 
 class RootNode(Node):
     @dataclass
@@ -57,6 +65,9 @@ class RootNode(Node):
             f', out_edges=[{", ".join(n.name for n in self.out_edges)}]' + \
             ']'
 
+    def get_data(self) -> Tuple[Any]:
+        return ('RootNode', self.name)
+
 class ActionNode(Node):
     def __init__(self, name: str, action: Action, params: Dict[str, TypedValue]) -> None:
         Node.__init__(self, name)
@@ -69,6 +80,9 @@ class ActionNode(Node):
             f', params={self.params}' + \
             f', out_edges=[{", ".join(n.name for n in self.out_edges)}]' + \
             ']'
+
+    def get_data(self) -> Tuple[Any]:
+        return ('ActionNode', self.action.name, frozenset(((n, v.get_data()) for n, v in self.params.items())))
 
 class SwitchNode(Node):
     def __init__(self, name: str, query: Query, params: Dict[str, TypedValue]) -> None:
@@ -105,6 +119,12 @@ class SwitchNode(Node):
             f', out_edges=[{", ".join(n.name for n in self.out_edges)}]' + \
             ']'
 
+    def get_data(self) -> Tuple[Any]:
+        return ('SwitchNode',
+                self.query.name,
+                frozenset(((n, v.get_data()) for n, v in self.params.items())),
+                frozenset(((n.name, tuple(l)) for n, l in self.cases.items())))
+
 class ForkNode(Node):
     def __init__(self, name: str, join_node: JoinNode, forks: List[Node]) -> None:
         Node.__init__(self, name)
@@ -116,6 +136,9 @@ class ForkNode(Node):
             f', join_node={self.join_node.name}' + \
             f', out_edges=[{", ".join(n.name for n in self.out_edges)}]' + \
             ']'
+
+    def get_data(self) -> tuple[Any]:
+        return ('ForkNode',)
 
 class JoinNode(Node):
     def __init__(self, name: str) -> None:
@@ -140,6 +163,10 @@ class SubflowNode(Node):
             f', params={self.params}' + \
             f', out_edges=[{", ".join(n.name for n in self.out_edges)}]' + \
             ']'
+
+    def get_data(self) -> Tuple[Any]:
+        return ('SubflowNode', self.ns, self.called_root_name,
+                frozenset(((n, v.get_data()) for n, v in self.params.items())))
 
 class ConnectorNode(Node):
     def __str__(self) -> str:

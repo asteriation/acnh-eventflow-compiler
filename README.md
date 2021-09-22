@@ -5,8 +5,8 @@ Tool to compile a readable, code-like format into eventflow flowcharts (bfevfl) 
 This project is the counterpart of [acnh-eventflow-decompiler](https://github.com/asteriation/acnh-eventflow-decompiler).
 
 This project is still a work in progress, and currently compiles all 562/562 of the decompiled flows
-from v1.11.0, with 448/562 recompiled flows being no larger than the original bfevfl file (364/562
-smaller, 84/562 same size).
+from v1.11.0, with 559/562 recompiled flows being no larger than the original bfevfl file (556/562
+smaller, 3/562 same size) when using `--optimize`.
 
 ## Usage
 
@@ -29,6 +29,9 @@ python3 main.py --functions functions.csv \
 This outputs the compiled bfevfls into `output_directory`.
 
 If compiling only a single file, `-o` can be used instead of `-d` to specify the output file name.
+
+There are some flags starting with `--f` to optimize for output file size (at the expense of a
+readable decompile), and `--optimize` enables them all.
 
 ## License
 

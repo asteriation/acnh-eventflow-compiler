@@ -227,7 +227,7 @@ def __replace_node(root: Node, replace: Node, replacement: Optional[Node]) -> No
             else:
                 node.reroute_out_edge(replace, replacement)
 
-def __process_local_calls(roots: List[RootNode], local_roots: Dict[str, RootNode], exported_roots: Dict[str, RootNode]):
+def __process_local_calls(roots: List[RootNode], local_roots: Dict[str, RootNode], exported_roots: Dict[str, RootNode], exported_tco: bool):
     post_calls: Dict[str, Set[Node]] = {}
     for root in roots:
         for node in find_postorder(root):
@@ -243,7 +243,7 @@ def __process_local_calls(roots: List[RootNode], local_roots: Dict[str, RootNode
                     called_node = local_roots[node.called_root_name] if node.called_root_name in local_roots else exported_roots[node.called_root_name]
                     if called_node.entrypoint:
                         if node.params:
-                            emit_error(f'entrypoint "{node.called_root_node}" should not be called with any parameters')
+                            emit_error(f'entrypoint "{node.called_root_name}" should not be called with any parameters')
                             raise LogError()
                         continue
                     if len(called_node.vardefs) != len(node.params):
@@ -289,7 +289,7 @@ def __process_local_calls(roots: List[RootNode], local_roots: Dict[str, RootNode
                 tail_call = (len(node.out_edges) == 1 and node.out_edges[0] is TerminalNode)
                 if node.called_root_name in local_roots:
                     reroutes[node] = local_roots[node.called_root_name].out_edges[0]
-                elif tail_call: # TODO expose as flag, this makes decompile ugly
+                elif tail_call and exported_tco:
                     # TODO fix mutual recursive case when turned off
                     reroutes[node] = exported_roots[node.called_root_name].out_edges[0]
 
@@ -523,6 +523,7 @@ def parse_custom_rules(ss: List[Tuple[str, str]], prefix_check: List[Tuple[str, 
 def parse(
     seq: List[Token],
     gen_actor: Callable[[str, str], Actor],
+    exported_tco: bool = False,
     custom_action_parser_pfx: Optional[Parser] = None,
     custom_action_parser_reg: Optional[Parser] = None,
     custom_query_parser_op: Optional[Parser] = None,
@@ -1164,7 +1165,7 @@ def parse(
     exported_roots = {r.name: r for r in roots if not r.local}
     for n in roots:
         __collapse_connectors(n)
-    __process_local_calls(roots, local_roots, exported_roots)
+    __process_local_calls(roots, local_roots, exported_roots, exported_tco)
     for n in roots:
         __replace_node(n, TerminalNode, None)
 

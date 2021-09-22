@@ -8,13 +8,14 @@ from typing import Set, Callable, List, Tuple
 
 from bfevfl.datatype import IntType, StrType, BoolType, Type
 from bfevfl.actors import Actor, Action, Query, Param
-from bfevfl.nodes import Node, ActionNode, SwitchNode, SubflowNode
+from bfevfl.nodes import Node, ActionNode, SwitchNode, SubflowNode, RootNode
 from bfevfl.file import File
 
 from funcparserlib.lexer import LexerError
 from funcparserlib.parser import NoParseError
 
 from compiler.parse import tokenize, parse, parse_custom_rules
+from compiler.optimize import optimize_names, optimize_merge_identical, make_counter_renamer, make_compact_renamer
 from compiler.util import find_postorder
 from compiler.logger import init_logger, setup_logger, emit_error, emit_fatal, LogException, LogError, LogFatal
 
@@ -80,7 +81,7 @@ def actor_gen_prepare(csvr, version: str) -> Tuple[Callable[[str, str], Actor], 
             [rule for rule in query_rules if rule],
             [rule for rule in query_op_rules if rule])
 
-def process_file(filename, output_dir, output_name, actor_gen, **kwargs):
+def process_file(filename, output_dir, output_name, actor_gen, optimizer_flags, **kwargs):
     init_logger(filename)
 
     if_ = Path(filename)
@@ -98,8 +99,15 @@ def process_file(filename, output_dir, output_name, actor_gen, **kwargs):
     roots, actors = parse(
         tokens,
         actor_gen,
+        exported_tco = optimizer_flags['exported_tco'],
         **kwargs
     )
+    if optimizer_flags['merge_duplicate']:
+        optimize_merge_identical(roots)
+    if optimizer_flags['short_event_names']:
+        optimize_names(roots, make_compact_renamer)
+    else:
+        optimize_names(roots, make_counter_renamer)
     nodes: Set[Node] = set()
     entrypoints = set(r.name for r in roots)
     for root in roots:
@@ -111,9 +119,10 @@ def process_file(filename, output_dir, output_name, actor_gen, **kwargs):
             elif isinstance(node, SwitchNode):
                 node.query.mark_used()
             elif isinstance(node, SubflowNode):
-                if node.ns == '' and node.called_root_name not in entrypoints:
-                    emit_error(f'subflow call for {node.called_root_name} but matching flow/entrypoint not found')
-                    raise LogError()
+                if node.ns == '':
+                    if node.called_root_name not in entrypoints:
+                        emit_error(f'subflow call for {node.called_root_name} but matching flow/entrypoint not found')
+                        raise LogError()
 
             nodes.add(node)
 
@@ -130,7 +139,24 @@ def main():
     parser.add_argument('-o', metavar='file', help='file to output to, overrides -d, ' +
             'cannot be used for multiple input files')
     parser.add_argument('files', metavar='evfl_file', nargs='+', help='.evfl files to compile')
+    parser.add_argument('--optimize', action='store_true', help='Enable all optimizer flags')
+
+    optimizer = parser.add_argument_group('Optimizer Flags', description='Optimizer flags for smaller output')
+    optimizer.add_argument('--fexported-tco', action='store_true', help='Perform tail-call-optimization for exported flows')
+    optimizer.add_argument('--fmerge-duplicate', action='store_true', help='Merge duplicate segments of code')
+    optimizer.add_argument('--fshort-event-names', action='store_true', help='Rename all events to very short names (instead of Event0, Event1, etc.)')
+
     args = parser.parse_args()
+    if args.optimize:
+        args.fexported_tco = True
+        args.fmerge_duplicate = True
+        args.fshort_event_names = True
+
+    optimizer_flags = dict(vars(args))
+    for k in list(optimizer_flags.keys()):
+        if k.startswith('f'):
+            optimizer_flags[k[1:]] = optimizer_flags[k]
+        del optimizer_flags[k]
 
     try:
         if len(args.files) > 1 and args.o:
@@ -174,6 +200,7 @@ def main():
                     output_dir,
                     output_name,
                     actor_gen,
+                    optimizer_flags,
                     custom_action_parser_pfx = custom_action_parsers[0],
                     custom_action_parser_reg = custom_action_parsers[1],
                     custom_query_parser_pfx = custom_query_parsers[0],

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Tuple
 
 class Argument(str):
     pass
@@ -35,3 +35,5 @@ class TypedValue:
     type: Type
     value: Any
 
+    def get_data(self) -> Tuple[Any]:
+        return ('TypedValue', self.type.type, self.value)
