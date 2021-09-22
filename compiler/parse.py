@@ -523,7 +523,7 @@ def parse_custom_rules(ss: List[Tuple[str, str]], prefix_check: List[Tuple[str, 
 def parse(
     seq: List[Token],
     gen_actor: Callable[[str, str], Actor],
-    exported_tco: bool = False,
+    exported_tco: bool = True,
     custom_action_parser_pfx: Optional[Parser] = None,
     custom_action_parser_reg: Optional[Parser] = None,
     custom_query_parser_op: Optional[Parser] = None,
