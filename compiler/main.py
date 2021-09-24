@@ -71,9 +71,9 @@ def actor_gen_prepare(csvr, version: str) -> Tuple[Callable[[str, str], Actor], 
     def inner(name: str, secondary_name: str) -> Actor:
         actor = Actor(name, secondary_name)
         for aname, params in actions:
-            actor.register_action(Action(name, aname, params))
+            actor.register_action(Action((name, secondary_name), aname, params))
         for qname, params, rtype, inverted in queries:
-            actor.register_query(Query(name, qname, params, rtype, inverted))
+            actor.register_query(Query((name, secondary_name), qname, params, rtype, inverted))
         return actor
 
     return (inner,
@@ -172,6 +172,7 @@ def main():
 
         function_prefix = [
             ('ID', None),
+            ('ACTOR', 'placeholder'),
             ('DOT', None),
             ('ID', None),
             ('LPAREN', None),

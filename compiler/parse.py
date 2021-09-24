@@ -25,11 +25,10 @@ def __compare_indent(base: str, new: str, pos: Tuple[int, int]) -> int:
     raise LexerError(pos, f'mixed tab/space indent')
 
 __tokens = [
-    ('ANNOTATION', (r'@[^@\r\n]*\r?\n',)),
     ('COMMENT', (r'#[^\r\n]*',)),
     ('SP', (r'[ \t]+',)),
     ('NL', (r'[\r\n]+',)),
-    ('ATAT', (r'@@',)),
+    ('AT', (r'@',)),
     ('COLON', (r':',)),
     ('LPAREN', (r'\(',)),
     ('RPAREN', (r'\)',)),
@@ -64,7 +63,6 @@ def tokenize(string: str) -> List[Token]:
     tokens: List[Token] = []
     buffered: List[Token] = []
     space_since_nl = False
-    first_non_annotation = False
     buffering = 0
 
     emit_token = lambda tok: (buffered if buffering else tokens).append(tok)
@@ -73,10 +71,6 @@ def tokenize(string: str) -> List[Token]:
         assert x.start is not None
         assert x.end is not None
         start, end = x.start, x.end
-        if x.type != 'ANNOTATION':
-            first_non_annotation = True
-        if first_non_annotation and x.type == 'ANNOTATION':
-            raise LexerError(start, "unexpected '@' - annotations must be at the top of the file")
 
         if x.type == 'COMMENT':
             continue
@@ -161,15 +155,6 @@ def tokenize(string: str) -> List[Token]:
         tokens.append(Token('DEDENT', '', start=(num_lines + 1, 0), end=(num_lines + 1, 0)))
 
     return tokens
-
-def __process_actor_annotations(seq: List[Token]) -> Tuple[Dict[str, str], List[Token]]:
-    i = 0
-    rv: Dict[str, str] = {}
-    while i < len(seq) and seq[i].type == 'ANNOTATION':
-        actor_name, sec_name = seq[i].value[1:].strip().split(':', 1)
-        rv[actor_name] = sec_name
-        i += 1
-    return rv, seq[i:]
 
 __Result = namedtuple('__Result', ('value', 'start', 'end'))
 
@@ -347,15 +332,19 @@ def __make_array(n):
 def swap_chars(s, x, y):
     m = {x: y, y: x}
     return ''.join(m.get(c, c) for c in s)
+
+def parse_id(n):
+    return swap_chars(eval(swap_chars(n, '`', '"')), '`', '"') if n[0] == '`' else n
+
 __int = __wrap_result(lambda n, s, e: TypedValue(type=IntType, value=int(n)))
 __float = __wrap_result(lambda n, s, e: TypedValue(type=FloatType, value=float(n)))
 __bool = __wrap_result(lambda n, s, e: TypedValue(type=BoolType, value={'false': False, 'true': True}[n]))
 __string = __wrap_result(lambda n, s, e: TypedValue(type=StrType, value=eval(n)))
-__identifier = __wrap_result(lambda n, s, e: TypedValue(type=StrType, value=swap_chars(eval(swap_chars(n, '`', '"')), '`', '"') if n[0] == '`' else n))
-__argument = __wrap_result(lambda n, s, e: TypedValue(type=AnyType, value=Argument(swap_chars(eval(swap_chars(n, '`', '"')), '`', '"') if n[0] == '`' else n)))
+__identifier = __wrap_result(lambda n, s, e: TypedValue(type=StrType, value=parse_id(n)))
+__argument = __wrap_result(lambda n, s, e: TypedValue(type=AnyType, value=Argument(parse_id(n))))
 __type = __wrap_result(lambda n, s, e: Type(type=n))
 
-id_ = __toktype('ID') | __toktype('QUOTE_ID')
+id_ = (__toktype('ID') | __toktype('QUOTE_ID')) >> __wrap_result(lambda n, s, e: parse_id(n))
 
 __base_value = (
     __toktype('INT') >> __int
@@ -406,13 +395,12 @@ def __parse_custom_rule(name: str, s: str, prefix_check: List[Tuple[str, Optiona
 
     def make_parser(type_, value, param, parse):
         nonlocal actor_set
-        if type_ not in valid_token_types and type_ not in ('NULL', 'VALUE'):
+        if type_ not in valid_token_types and type_ not in ('ACTOR', 'VALUE'):
             exit_bad_rule(f'"{type_}" is not a valid token type')
-        if param == '.actor':
+        if type_ == 'ACTOR':
             actor_set = True
-        if type_ == 'NULL':
             if value:
-                exit_bad_rule("NULL token cannot be used with value check")
+                exit_bad_rule("ACTOR token cannot be used with value check")
         if type_ == 'VALUE':
             if value:
                 exit_bad_rule("VALUE token cannot be used with value check")
@@ -429,6 +417,27 @@ def __parse_custom_rule(name: str, s: str, prefix_check: List[Tuple[str, Optiona
             else:
                 out.append(skip(a(Token(type_, value))))
             return True
+        elif type_ == 'ACTOR':
+            if param is not None:
+                @__wrap_result
+                def handle_secondary_only(t, start, end):
+                    return {'.actor_secondary': '' if t is None else t}
+                if param != '.name':
+                    exit_bad_rule("ACTOR token parameter must be .name")
+                if parse is None:
+                    exit_bad_rule("ACTOR .name must be set if present")
+                try:
+                    name = eval_(parse)
+                except:
+                    exit_bad_rule("Failed to parse actor primary name")
+                params['.actor_name'] = name
+                out.append(maybe(__tokop('AT') + id_) >> handle_secondary_only)
+            else:
+                @__wrap_result
+                def handle_actor(t, start, end):
+                    name, secondary = t
+                    return {'.actor_name': name, '.actor_secondary': '' if secondary is None else secondary}
+                out.append((id_ + maybe(__tokop('AT') + id_)) >> handle_actor)
         elif not param:
             out.append(skip(some(lambda x: x.type == type_ if type_ != 'ID' else x.type in ('ID', 'QUOTE_ID'))))
         else:
@@ -437,10 +446,6 @@ def __parse_custom_rule(name: str, s: str, prefix_check: List[Tuple[str, Optiona
                 f = eval_(f'lambda __type, __value: {parse}')
             except:
                 exit_bad_rule("Failed to parse custom rule")
-
-            if type_ == 'NULL':
-                params[param] = f(None, None)
-                return False
 
             @__wrap_result
             def inner(t, start, end):
@@ -476,7 +481,21 @@ def __parse_custom_rule(name: str, s: str, prefix_check: List[Tuple[str, Optiona
         type_, value, param, parse = m.groups()
         if make_parser(type_, value, param, parse):
             num_exact_match += 1
-        if type_ != 'NULL':
+        if type_ != 'ACTOR' or param is not None:
+            if i >= len(prefix_check) or type_ != prefix_check[i][0] or \
+                    (value is not None and eval_(value) != prefix_check[i][1]):
+                if not (i < len(prefix_check) and type_ == 'VALUE' and prefix_check[i][0] == 'ID'):
+                    is_prefix = False
+            i += 1
+        else:
+            value_ = None
+            type_ = 'ID'
+            if i >= len(prefix_check) or type_ != prefix_check[i][0] or \
+                    (value is not None and eval_(value) != prefix_check[i][1]):
+                if not (i < len(prefix_check) and type_ == 'VALUE' and prefix_check[i][0] == 'ID'):
+                    is_prefix = False
+            i += 1
+            type_ = 'ACTOR'
             if i >= len(prefix_check) or type_ != prefix_check[i][0] or \
                     (value is not None and eval_(value) != prefix_check[i][1]):
                 if not (i < len(prefix_check) and type_ == 'VALUE' and prefix_check[i][0] == 'ID'):
@@ -484,7 +503,7 @@ def __parse_custom_rule(name: str, s: str, prefix_check: List[Tuple[str, Optiona
             i += 1
 
     if not actor_set:
-        exit_bad_rule(".actor never set in custom rule", mark_rule=False)
+        exit_bad_rule("ACTOR never set in custom rule", mark_rule=False)
 
     @__wrap_result
     def final(t, start, end):
@@ -531,8 +550,7 @@ def parse(
     custom_query_parser_pfx: Optional[Parser] = None,
     custom_query_parser_reg: Optional[Parser] = None
 ) -> Tuple[List[RootNode], List[Actor]]:
-    actors: Dict[str, Actor] = {}
-    actor_secondary_names, seq = __process_actor_annotations(seq)
+    actors: Dict[Tuple[str, str], Actor] = {}
 
     nid = 0
     def next_id() -> int:
@@ -544,18 +562,20 @@ def parse(
         if len(p) == 1:
             p = p[0]
         if isinstance(p, dict):
-            actor = p.pop('.actor')
+            actor = (p.pop('.actor_name'), p.pop('.actor_secondary'))
             name = p.pop('.name')
             negated = p.pop('.negated')
             params = pdict = p
             prepare_params = False
         else:
-            actor, name, params = p
+            actor_name, actor_secondary, name, params = p
+            actor = (actor_name, actor_secondary or '')
             negated = False
             prepare_params = True
+
         function_name = f'EventFlow{type_.capitalize()}{name}'
         if actor not in actors:
-            actors[actor] = gen_actor(actor, actor_secondary_names.get(actor, ''))
+            actors[actor] = gen_actor(*actor)
         mp = getattr(actors[actor], ['actions', 'queries'][type_ == 'query'])
         if function_name not in mp:
             emit_error(f'no {type_} with name "{function_name}" found', start, end)
@@ -984,8 +1004,8 @@ def parse(
     # function_params =  [value { COMMA value }]
     function_params = maybe(__value + many(__tokop('COMMA') + __value)) >> __make_array
 
-    # actor_name = id
-    actor_name = id_
+    # actor_name = id [ AT id ]
+    actor_name = id_ + maybe(__tokop('AT') + id_)
     # function_name = id
     function_name = id_
     # base_function = actor_name DOT action_name LPAREN function_params RPAREN

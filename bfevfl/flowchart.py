@@ -262,9 +262,9 @@ class Flowchart(ContainerBlock):
         num_actions = 0
         num_queries = 0
 
-        actor_indices: Dict[str, int] = {}
-        action_indices: Dict[str, Dict[str, int]] = {}
-        query_indices: Dict[str, Dict[str, int]] = {}
+        actor_indices: Dict[Tuple[str, str], int] = {}
+        action_indices: Dict[Tuple[str, str], Dict[str, int]] = {}
+        query_indices: Dict[Tuple[str, str], Dict[str, int]] = {}
         for actor in actors_:
             actions = [n for n, a in actor.actions.items() if a.used]
             queries = [n for n, q in actor.queries.items() if q.used]
@@ -274,9 +274,10 @@ class Flowchart(ContainerBlock):
             if not actions and not queries:
                 continue
 
-            actor_indices[actor.name] = len(actor_indices)
-            action_indices[actor.name] = {n: i for i, n in enumerate(actions)}
-            query_indices[actor.name] = {n: i for i, n in enumerate(queries)}
+            actor_name = (actor.name, actor.secondary_name)
+            actor_indices[actor_name] = len(actor_indices)
+            action_indices[actor_name] = {n: i for i, n in enumerate(actions)}
+            query_indices[actor_name] = {n: i for i, n in enumerate(queries)}
 
             action_array = BlockPtrArray[String]([pool[s] for s in actions]) if actions else None
             query_array = BlockPtrArray[String]([pool[s] for s in queries]) if queries else None

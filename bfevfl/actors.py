@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, NamedTuple, Optional, Union
+from typing import Any, Dict, List, NamedTuple, Optional, Union, Tuple
 
 from .datatype import Argument, AnyType, IntType, StrType, Type, TypedValue
 
@@ -9,7 +9,7 @@ class Param(NamedTuple):
     type: Type
 
 class Function:
-    def __init__(self, actor_name: str, name: str, params: List[Param]) -> None:
+    def __init__(self, actor_name: Tuple[str, str], name: str, params: List[Param]) -> None:
         self.actor_name = actor_name
         self.name = name
         self.params = params
@@ -55,7 +55,7 @@ class Action(Function):
     pass
 
 class Query(Function):
-    def __init__(self, actor_name: str, name: str, params: List[Param], rv: Type, inverted: bool = False) -> None:
+    def __init__(self, actor_name: Tuple[str, str], name: str, params: List[Param], rv: Type, inverted: bool = False) -> None:
         super().__init__(actor_name, name, params)
         self.rv = rv
         self.inverted = inverted

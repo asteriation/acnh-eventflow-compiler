@@ -270,24 +270,24 @@ class TestParser(unittest.TestCase):
     def generate_actor(self, name: str, secondary_name: str) -> Actor:
         actor = Actor(name, secondary_name)
 
-        actor.register_action(Action(name, 'EventFlowActionAction0', []))
-        actor.register_action(Action(name, 'EventFlowActionAction1', [
+        actor.register_action(Action((name, ''), 'EventFlowActionAction0', []))
+        actor.register_action(Action((name, ''), 'EventFlowActionAction1', [
             Param('param0', IntType),
         ]))
-        actor.register_action(Action(name, 'EventFlowActionAction2', [
+        actor.register_action(Action((name, ''), 'EventFlowActionAction2', [
             Param('param0', StrType),
         ]))
-        actor.register_action(Action(name, 'EventFlowActionAction3', [
+        actor.register_action(Action((name, ''), 'EventFlowActionAction3', [
             Param('param0', IntType),
             Param('param1', StrType),
             Param('param2', FloatType),
             Param('param3', BoolType),
         ]))
-        actor.register_query(Query(name, 'EventFlowQueryQuery0', [], Type('int3'), False))
-        actor.register_query(Query(name, 'EventFlowQueryQuery1', [
+        actor.register_query(Query((name, ''), 'EventFlowQueryQuery0', [], Type('int3'), False))
+        actor.register_query(Query((name, ''), 'EventFlowQueryQuery1', [
             Param('param0', IntType),
         ], Type('bool'), False))
-        actor.register_query(Query(name, 'EventFlowQueryQuery2', [
+        actor.register_query(Query((name, ''), 'EventFlowQueryQuery2', [
             Param('param0', IntType),
         ], Type('bool'), True))
 
