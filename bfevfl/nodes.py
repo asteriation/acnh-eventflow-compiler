@@ -43,7 +43,7 @@ class Node(ABC):
         return f'n{id(self)} [label=<<b>{self.name} ({type(self).__name__})</b><br/>{type(self).__name__}>];' + \
                 ''.join(f'n{id(self)} -> n{id(nx)};' for nx in self.out_edges)
 
-    def get_data(self) -> Tuple[Any]:
+    def get_data(self) -> Tuple:
         return tuple()
 
 class RootNode(Node):
@@ -65,7 +65,7 @@ class RootNode(Node):
             f', out_edges=[{", ".join(n.name for n in self.out_edges)}]' + \
             ']'
 
-    def get_data(self) -> Tuple[Any]:
+    def get_data(self) -> Tuple:
         return ('RootNode', self.name)
 
 class ActionNode(Node):
@@ -81,7 +81,7 @@ class ActionNode(Node):
             f', out_edges=[{", ".join(n.name for n in self.out_edges)}]' + \
             ']'
 
-    def get_data(self) -> Tuple[Any]:
+    def get_data(self) -> Tuple:
         return ('ActionNode', self.action.name, frozenset(((n, v.get_data()) for n, v in self.params.items())))
 
 class SwitchNode(Node):
@@ -119,7 +119,7 @@ class SwitchNode(Node):
             f', out_edges=[{", ".join(n.name for n in self.out_edges)}]' + \
             ']'
 
-    def get_data(self) -> Tuple[Any]:
+    def get_data(self) -> Tuple:
         return ('SwitchNode',
                 self.query.name,
                 frozenset(((n, v.get_data()) for n, v in self.params.items())),
@@ -137,7 +137,7 @@ class ForkNode(Node):
             f', out_edges=[{", ".join(n.name for n in self.out_edges)}]' + \
             ']'
 
-    def get_data(self) -> tuple[Any]:
+    def get_data(self) -> Tuple:
         return ('ForkNode',)
 
 class JoinNode(Node):
@@ -164,7 +164,7 @@ class SubflowNode(Node):
             f', out_edges=[{", ".join(n.name for n in self.out_edges)}]' + \
             ']'
 
-    def get_data(self) -> Tuple[Any]:
+    def get_data(self) -> Tuple:
         return ('SubflowNode', self.ns, self.called_root_name,
                 frozenset(((n, v.get_data()) for n, v in self.params.items())))
 

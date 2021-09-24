@@ -35,5 +35,5 @@ class TypedValue:
     type: Type
     value: Any
 
-    def get_data(self) -> Tuple[Any]:
+    def get_data(self) -> Tuple:
         return ('TypedValue', self.type.type, self.value)

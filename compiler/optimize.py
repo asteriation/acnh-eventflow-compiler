@@ -15,7 +15,7 @@ def optimize_merge_identical(roots: List[RootNode]) -> None:
     changed = True
     while changed:
         changed = False
-        d: Dict[Tuple[Any], Node] = {}
+        d: Dict[Tuple, Node] = {}
         visited: Set[Node] = set()
         for root in roots:
             for node in find_postorder(root):
@@ -24,6 +24,9 @@ def optimize_merge_identical(roots: List[RootNode]) -> None:
                 visited.add(node)
                 if isinstance(node, JoinNode): # JoinNodes are paired with ForkNodes
                     continue
+                data: Tuple
+                children: Tuple
+                key: Tuple
                 if not isinstance(node, ForkNode):
                     data = node.get_data()
                     children = tuple(sorted([n.name for n in node.out_edges]))
