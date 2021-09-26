@@ -10,13 +10,13 @@ from bfevfl.datatype import IntType, StrType, BoolType, Type
 from bfevfl.actors import Actor, Action, Query, Param
 from bfevfl.nodes import Node, ActionNode, SwitchNode, SubflowNode, RootNode
 from bfevfl.file import File
+from bfevfl.util import find_postorder
 
 from funcparserlib.lexer import LexerError
 from funcparserlib.parser import NoParseError
 
 from compiler.parse import tokenize, parse, parse_custom_rules
 from compiler.optimize import optimize_names, optimize_merge_identical, make_counter_renamer, make_compact_renamer
-from compiler.util import find_postorder
 from compiler.logger import init_logger, setup_logger, emit_error, emit_fatal, LogException, LogError, LogFatal
 
 def param_str_to_param(pstr: str) -> Param:

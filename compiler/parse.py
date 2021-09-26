@@ -10,12 +10,12 @@ from funcparserlib.parser import a, some, maybe, many, finished, skip, forward_d
 from more_itertools import peekable
 
 from compiler.logger import emit_info, emit_warning, emit_error, emit_fatal, LogError, LogFatal
-from compiler.util import find_postorder
 
 from bfevfl.datatype import AnyType, Argument, ArgumentType, BoolType, FloatType, IntType, StrType, Type, TypedValue
 from bfevfl.actors import Param, Action, Actor
 from bfevfl.nodes import (Node, RootNode, ActionNode, SwitchNode, JoinNode, ForkNode,
         SubflowNode, TerminalNode, ConnectorNode)
+from bfevfl.util import find_postorder
 
 def __compare_indent(base: str, new: str, pos: Tuple[int, int]) -> int:
     if base.startswith(new):

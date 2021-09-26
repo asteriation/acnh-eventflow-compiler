@@ -1,7 +1,7 @@
 from typing import Callable, List, Set, Dict, Tuple
 
 from bfevfl.nodes import Node, RootNode, SubflowNode, ForkNode, JoinNode
-from compiler.util import find_postorder
+from bfevfl.util import find_postorder
 
 def __merge_identical_nodes(a: Node, b: Node) -> None:
     # merge a into b; a is effectively deleted after this

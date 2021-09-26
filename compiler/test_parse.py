@@ -10,9 +10,9 @@ from funcparserlib.parser import NoParseError
 from bfevfl.datatype import BoolType, FloatType, IntType, StrType, Type
 from bfevfl.actors import Action, Actor, Query, Param
 from bfevfl.nodes import RootNode, TerminalNode, TerminalNode_, Node
+from bfevfl.util import find_postorder
 
 from compiler.parse import tokenize, parse
-from compiler.util import find_postorder
 from compiler.logger import set_log_level
 
 class TestTokenize(unittest.TestCase):

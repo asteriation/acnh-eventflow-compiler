@@ -14,6 +14,8 @@ from .dic_ import Dictionary
 from .array import BlockPtrArray, BlockArray, Uint16Array
 from .container import Container
 
+from .util import find_postorder
+
 class _Actor(DataBlock):
     def __init__(self, name: str, sec_name: str, actions: Optional[BlockPtrArray[String]],
                  queries: Optional[BlockPtrArray[String]], pool: StringPool) -> None:
@@ -257,7 +259,7 @@ class Flowchart(ContainerBlock):
         entrypoints: List[_Entrypoint] = []
         event_data: List[_EventData] = []
         actor_fnames: List[BlockPtrArray[String]] = []
-        entrypoint_data: List[_EntrypointData] = []
+        entrypoint_data: List[Union[Uint16Array, _EntrypointData]] = []
 
         num_actions = 0
         num_queries = 0
@@ -288,7 +290,6 @@ class Flowchart(ContainerBlock):
                 actor_fnames.append(query_array)
 
         event_indices = {n: i for i, n in enumerate(events_)}
-        entrypoint_calls: Dict[str, List[int]] = {n.name: [] for n in entrypoints_}
         for event in events_:
             ev: _Event
             evdata: Optional[_EventData]
@@ -339,7 +340,12 @@ class Flowchart(ContainerBlock):
                 event_data.append(evdata)
 
         for entrypoint in entrypoints_:
-            si = Uint16Array(entrypoint_calls[entrypoint.name]) or None
+            subflow_indices = []
+            for node in find_postorder(entrypoint):
+                if isinstance(node, SubflowNode):
+                    subflow_indices.append(event_indices[node])
+            si = Uint16Array(subflow_indices) or None
+            print(entrypoint.name, subflow_indices)
 
             vardef_names: Optional[Dictionary] = None
             vardefs: Optional[BlockArray[_VarDef]] = None
@@ -357,6 +363,8 @@ class Flowchart(ContainerBlock):
 
             entrypoint_names.append(entrypoint.name)
             entrypoints.append(ep)
+            if si is not None:
+                entrypoint_data.append(si)
             entrypoint_data.append(epdata)
 
         actor_array = BlockArray[_Actor](actors)
