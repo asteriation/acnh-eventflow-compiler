@@ -232,13 +232,16 @@ def __process_local_calls(roots: List[RootNode], local_roots: Dict[str, RootNode
                             emit_error(f'entrypoint "{node.called_root_name}" should not be called with any parameters')
                             raise LogError()
                         continue
-                    if len(called_node.vardefs) != len(node.params):
-                        emit_error(f'{node.called_root_name} expects {len(called_node.vardefs)} parameters but received {len(node.params)}')
+                    default_vardefs = {v.name: v for v in called_node.vardefs if v.initial_value is not None}
+                    if len(called_node.vardefs) - len(default_vardefs) > len(node.params):
+                        emit_error(f'{node.called_root_name} expects at least {len(called_node.vardefs) - len(default_vardefs)} parameters but received {len(node.params)}')
                         raise LogError()
                     for vardef in called_node.vardefs:
-                        if vardef.name not in node.params:
+                        if vardef.name not in node.params and vardef.name not in default_vardefs:
                             emit_error(f'{node.called_root_name} expects parameter "{vardef.name}" of type {vardef.type}')
                             raise LogError()
+                        if vardef.name not in node.params:
+                            continue
                         param = node.params[vardef.name]
                         param_type = param.type
                         if param_type == ArgumentType:
