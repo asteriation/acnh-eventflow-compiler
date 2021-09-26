@@ -258,7 +258,7 @@ def __process_local_calls(roots: List[RootNode], local_roots: Dict[str, RootNode
     for name, root in list(local_roots.items()):
         if name not in post_calls:
             continue
-        if len(post_calls[name]) == 1:
+        if len(post_calls[name]) == 1 and all(v.initial_value is None for v in root.vardefs):
             continue_ = next(iter(post_calls[name]))
             if continue_ is TerminalNode:
                 continue
@@ -272,6 +272,8 @@ def __process_local_calls(roots: List[RootNode], local_roots: Dict[str, RootNode
     for root in roots:
         for node in find_postorder(root):
             if isinstance(node, SubflowNode) and node.ns == '':
+                if not all(p.type == ArgumentType for p in node.params.values()):
+                    continue
                 tail_call = (len(node.out_edges) == 1 and node.out_edges[0] is TerminalNode)
                 if node.called_root_name in local_roots:
                     reroutes[node] = local_roots[node.called_root_name].out_edges[0]
