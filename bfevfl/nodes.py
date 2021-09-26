@@ -104,7 +104,9 @@ class SwitchNode(Node):
         if old_dest in self.cases:
             c = self.cases[old_dest]
             del self.cases[old_dest]
-            self.cases[new_dest] = c
+            if new_dest not in self.cases:
+                self.cases[new_dest] = []
+            self.cases[new_dest].extend(c)
 
     def add_case(self, node: Node, value: int) -> None:
         if node not in self.cases:
