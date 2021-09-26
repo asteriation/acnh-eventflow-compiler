@@ -345,7 +345,6 @@ class Flowchart(ContainerBlock):
                 if isinstance(node, SubflowNode):
                     subflow_indices.append(event_indices[node])
             si = Uint16Array(subflow_indices) or None
-            print(entrypoint.name, subflow_indices)
 
             vardef_names: Optional[Dictionary] = None
             vardefs: Optional[BlockArray[_VarDef]] = None

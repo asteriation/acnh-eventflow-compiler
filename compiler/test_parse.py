@@ -106,10 +106,6 @@ class TestTokenize(unittest.TestCase):
         with self.assertRaises(LexerError):
             tokenize('[')
 
-    def test_nonstart_annotation(self):
-        with self.assertRaises(LexerError):
-            tokenize(' @')
-
     def test_id(self):
         with self.assertRaises(LexerError):
             tokenize('-abc')
@@ -237,7 +233,6 @@ class TestParser(unittest.TestCase):
         ('flow_decl_second_line', None),
         ('simple_fork', None),
         ('fork_join_action', None),
-        ('annotation', None),
         ('leading_comments', None),
         ('subflow', None),
         ('subflow_tail_call', None),

@@ -15,7 +15,7 @@ class TestFile(unittest.TestCase):
 
         sys_actor = Actor('EventFlowSystemActor')
         sys_actor.register_action(Action(
-            'EventFlowSystemActor',
+            ('EventFlowSystemActor', ''),
             'EventFlowActionWaitFrame',
             [Param('WaitFrame', IntType)],
         ))
@@ -23,12 +23,12 @@ class TestFile(unittest.TestCase):
 
         player_actor = Actor('Player')
         player_actor.register_action(Action(
-            'Player',
+            ('Player', ''),
             'EventFlowActionOpenMessageWindow',
             [Param('MessageID', StrType), Param('IsCloseMessageWindow', BoolType)],
         ))
         player_actor.register_action(Action(
-            'Player',
+            ('Player', ''),
             'EventFlowActionPlayerClearFoodPowerup',
             [],
         ))
