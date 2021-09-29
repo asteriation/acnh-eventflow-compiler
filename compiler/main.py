@@ -24,30 +24,17 @@ def param_str_to_param(pstr: str) -> Param:
     name, type_ = name.strip(), type_.strip()
     return Param(name, Type(type_))
 
-def compare_version(v1: str, v2: str) -> int:
-    t1 = tuple(int(p) for p in v1.split('.'))
-    t2 = tuple(int(p) for p in v2.split('.'))
-    if t1 < t2:
-        return -1
-    elif t1 > t2:
-        return 1
-    return 0
-
-def actor_gen_prepare(csvr, version: str) -> Tuple[Callable[[str, str], Actor], List[Tuple[str, str]], List[Tuple[str, str]], List[Tuple[str, str]]]:
+def actor_gen_prepare(csvr) -> Tuple[Callable[[str, str], Actor], List[Tuple[str, str]], List[Tuple[str, str]], List[Tuple[str, str]]]:
     actions: List[Tuple[str, List[Param]]] = []
     queries: List[Tuple[str, List[Param], Type, bool]] = []
     action_rules: List[Tuple[str, str]] = []
     query_rules: List[Tuple[str, str]] = []
     query_op_rules: List[Tuple[str, str]] = []
 
-    # MaxVersion, Type, Name, Parameters[, Return]
     header = next(csvr)
-    maxver_i, type_i, name_i, param_i, return_i, rtype_i, rule_i = (header.index(s) for s in ('MaxVersion', 'Type', 'Name', 'Parameters', 'Return', 'ParseType', 'ParseRule'))
+    type_i, name_i, param_i, return_i, rtype_i, rule_i = (header.index(s) for s in ('Type', 'Name', 'Parameters', 'Return', 'ParseType', 'ParseRule'))
     for row in csvr:
         row = [s.strip() for s in row]
-        maxver = row[maxver_i]
-        if maxver == 'pseudo' or compare_version(maxver, version) < 0:
-            continue
         params = []
         if row[param_i]:
             params = [param_str_to_param(p) for p in row[param_i].split(';')]
@@ -134,7 +121,6 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--functions', metavar='functions.csv', default='functions.csv',
             help='functions.csv for EventFlow function type information (default: ./functions.csv)')
-    parser.add_argument('--version', metavar='version', default='9.9.9', help='target game version (default: 9.9.9)')
     parser.add_argument('-d', metavar='output_directory', help='output directory')
     parser.add_argument('-o', metavar='file', help='file to output to, overrides -d, ' +
             'cannot be used for multiple input files')
@@ -168,7 +154,7 @@ def main():
             emit_fatal(f'cannot open {args.f}')
             raise LogFatal()
         with fcsv.open('rt') as f:
-            actor_gen, action_rules, query_rules, query_op_rules = actor_gen_prepare(csv.reader(f), args.version)
+            actor_gen, action_rules, query_rules, query_op_rules = actor_gen_prepare(csv.reader(f))
 
         function_prefix = [
             ('ID', None),

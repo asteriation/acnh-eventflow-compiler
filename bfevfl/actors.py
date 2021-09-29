@@ -69,6 +69,9 @@ class Actor:
         self.actions: Dict[str, Action] = {}
         self.queries: Dict[str, Query] = {}
 
+        # hardcoded in the game binary..
+        self.register_action(Action((self.name, self.secondary_name), 'EventFlowActionExitFlowchart', []))
+
     def register_action(self, action: Action) -> None:
         if action.name not in self.actions:
             self.actions[action.name] = action

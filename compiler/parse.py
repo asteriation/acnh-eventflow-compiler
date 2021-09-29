@@ -12,7 +12,7 @@ from more_itertools import peekable
 from compiler.logger import emit_info, emit_warning, emit_error, emit_fatal, LogError, LogFatal
 
 from bfevfl.datatype import AnyType, Argument, ArgumentType, BoolType, FloatType, IntType, StrType, Type, TypedValue
-from bfevfl.actors import Param, Action, Actor
+from bfevfl.actors import Param, Action, Query, Actor
 from bfevfl.nodes import (Node, RootNode, ActionNode, SwitchNode, JoinNode, ForkNode,
         SubflowNode, TerminalNode, ConnectorNode)
 from bfevfl.util import find_postorder
@@ -583,8 +583,12 @@ def parse(
             actors[actor] = gen_actor(*actor)
         mp = getattr(actors[actor], ['actions', 'queries'][type_ == 'query'])
         if function_name not in mp:
-            emit_error(f'no {type_} with name "{function_name}" found', start, end)
-            raise LogError()
+            emit_warning(f'no {type_} with name "{function_name}" found, using empty call', start, end)
+            print('aaa')
+            if type_ == 'action':
+                actors[actor].register_action(Action(actor, function_name, []))
+            else:
+                actors[actor].register_query(Query(actor, function_name, [], IntType, False))
         function = mp[function_name]
         if prepare_params:
             try:
@@ -1168,8 +1172,8 @@ def parse(
     # block = COLON NL INDENT block_body DEDENT
     block.define(__tokop('COLON') + __tokop('NL') + __tokop('INDENT') + block_body + __tokop('DEDENT'))
 
-    # type = INT | FLOAT | STR | BOOL
-    type_atom = (__tokkw_keep('int') | __tokkw_keep('float') | __tokkw_keep('str') | __tokkw_keep('bool')) >> __type
+    # type = INT | FLOAT | STR | BOOL | ANY
+    type_atom = (__tokkw_keep('int') | __tokkw_keep('float') | __tokkw_keep('str') | __tokkw_keep('bool') | __tokkw_keep('any')) >> __type
 
     # flow_param = ID COLON TYPE [ASSIGN base_value]
     flow_param = id_ + __tokop('COLON') + type_atom + maybe(__tokop('ASSIGN') + __base_value) >> make_param
