@@ -82,7 +82,7 @@ class ActionNode(Node):
             ']'
 
     def get_data(self) -> Tuple:
-        return ('ActionNode', self.action.name, frozenset(((n, v.get_data()) for n, v in self.params.items())))
+        return ('ActionNode', self.action.actor_name, self.action.name, frozenset(((n, v.get_data()) for n, v in self.params.items())))
 
 class SwitchNode(Node):
     def __init__(self, name: str, query: Query, params: Dict[str, TypedValue]) -> None:
@@ -123,6 +123,7 @@ class SwitchNode(Node):
 
     def get_data(self) -> Tuple:
         return ('SwitchNode',
+                self.query.actor_name,
                 self.query.name,
                 frozenset(((n, v.get_data()) for n, v in self.params.items())),
                 frozenset(((n.name, tuple(l)) for n, l in self.cases.items())))
