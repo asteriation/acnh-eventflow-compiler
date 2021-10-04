@@ -37,7 +37,7 @@ def actor_gen_prepare(csvr) -> Tuple[Callable[[str, str], Actor], List[Tuple[str
         row = [s.strip() for s in row]
         params = []
         if row[param_i]:
-            params = [param_str_to_param(p) for p in row[param_i].split(';')]
+            params = [param_str_to_param(p) for p in row[param_i].split(';') if p.strip() != '...']
         if row[type_i] == 'Action':
             actions.append(('EventFlowAction' + row[name_i], params))
             action_rules.append((row[name_i], row[rule_i]))

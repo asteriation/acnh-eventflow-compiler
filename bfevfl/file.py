@@ -5,7 +5,7 @@ from typing import List, Set
 from bitstring import BitStream, pack
 
 from .actors import Actor
-from .nodes import Node, RootNode, SubflowNode
+from .nodes import Node, RootNode, SubflowNode, ActionNode, SwitchNode
 from .block import DataBlock, ContainerBlock
 from .str_ import StringPool
 from .dic_ import Dictionary
@@ -70,6 +70,9 @@ class File(ContainerBlock):
                 pooled_strings.add(n.called_root_name)
                 # keys are in pool, but values are stored in place
                 pooled_strings.update(n.params.keys())
+            elif isinstance(n, (ActionNode, SwitchNode)):
+                for param in n.params.keys():
+                    pooled_strings.add(param)
             elif isinstance(n, RootNode):
                 for vardef in n.vardefs:
                     pooled_strings.add(vardef.name)

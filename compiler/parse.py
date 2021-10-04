@@ -584,7 +584,6 @@ def parse(
         mp = getattr(actors[actor], ['actions', 'queries'][type_ == 'query'])
         if function_name not in mp:
             emit_warning(f'no {type_} with name "{function_name}" found, using empty call', start, end)
-            print('aaa')
             if type_ == 'action':
                 actors[actor].register_action(Action(actor, function_name, []))
             else:
@@ -592,7 +591,12 @@ def parse(
         function = mp[function_name]
         if prepare_params:
             try:
-                pdict = function.prepare_param_dict(params)
+                pdict = function.prepare_param_dict([p for name, p in params if name is None])
+                for name, p in params:
+                    if name is not None:
+                        if name in pdict:
+                            emit_warning(f'keyword argument name {name} matches positional argument name', start, end)
+                        pdict[name] = p
             except AssertionError as e:
                 emit_error(str(e), start, end)
                 raise LogError()
@@ -891,6 +895,14 @@ def parse(
         return (), (TerminalNode,)
 
     @__wrap_result
+    def named_value(n, start, end):
+        return n
+
+    @__wrap_result
+    def unnamed_value(n, start, end):
+        return (None, n)
+
+    @__wrap_result
     def make_param(n, start, end):
         return n
 
@@ -922,7 +934,7 @@ def parse(
                         else:
                             value.type = ArgumentType
 
-                        if expected_type != actual_type:
+                        if actual_type != AnyType and expected_type != actual_type:
                             emit_error(f'variable {value.value} has the wrong type, defined to be {expected_type} but used as {actual_type}')
                             raise LogError()
 
@@ -1010,8 +1022,11 @@ def parse(
     # return = RETURN NL
     return_ = (__tokkw('return') + __tokop('NL')) >> make_return
 
-    # function_params =  [value { COMMA value }]
-    function_params = maybe(__value + many(__tokop('COMMA') + __value)) >> __make_array
+    # id_value = id ASSIGN value | value
+    id_value = ((id_ + __tokop('ASSIGN') + __value) >> named_value) | (__value >> unnamed_value)
+
+    # function_params = [id_value {COMMA id_value}]
+    function_params = maybe(id_value + many(__tokop('COMMA') + id_value)) >> __make_array
 
     # actor_name = id [ AT id ]
     actor_name = id_ + maybe(__tokop('AT') + id_)
