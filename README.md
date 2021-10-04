@@ -7,6 +7,10 @@ This project is the counterpart of [acnh-eventflow-decompiler](https://github.co
 This project compiles all 562/562 of the decompiled flows from ACNH v1.11.0, with 558/562 compiled flows
 being smaller, and 3/562 being the same size when using `--optimize`.
 
+## Installation
+
+This compiler uses several libraries, which can be installed with `python3 -m pip install -r requirements.txt`.
+
 ## Usage
 
 The decompiler may be run through `main.py` using Python 3.7+.
