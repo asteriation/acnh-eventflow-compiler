@@ -371,7 +371,7 @@ class Flowchart(ContainerBlock):
         entrypoint_dictionary = Dictionary(entrypoint_names, pool)
         entrypoint_array = BlockArray[_Entrypoint](entrypoints)
         event_data_array = BlockArray[_EventData](event_data)
-        entrypoint_data_array = BlockArray[_EntrypointData](entrypoint_data)
+        entrypoint_data_array = BlockArray[Union[Uint16Array, _EntrypointData]](entrypoint_data)
 
         header = _FlowchartHeader(name, num_actions, num_queries, actor_array, event_array,
                 entrypoint_dictionary, entrypoint_array, pool)
