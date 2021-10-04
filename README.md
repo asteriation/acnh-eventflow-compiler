@@ -19,7 +19,6 @@ You will also need to supply the evfl files to be compiled.
 mkdir -p out/
 
 python3 main.py --functions functions.csv \
-                --version 1.0.0 \
                 -d output_directory \
                 file1.evfl file2.evfl ...
 ```
