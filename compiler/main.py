@@ -149,6 +149,7 @@ def main():
             emit_fatal('-o cannot be used with multiple input files')
             raise LogFatal()
 
+        setattr(args, "f", args.functions)
         fcsv = Path(args.functions)
         if not fcsv.exists() or not fcsv.is_file():
             emit_fatal(f'cannot open {args.f}')
